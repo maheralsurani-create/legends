@@ -1,4 +1,5 @@
 import io
+import os
 from datetime import datetime, timedelta
 import pandas as pd
 import plotly.graph_objects as go
@@ -8,6 +9,7 @@ import database as db
 
 db.init_db()
 st.set_page_config(page_title="Legends School & Kindergarten — SMS", layout="wide")
+
 LOGO_CANDIDATES = [
     "logo.png",
     "logo.jpg",
@@ -25,29 +27,6 @@ def render_school_logo(width: int = 120) -> bool:
             return True
     return False
 
-
-def render_school_logo(width: int = 120) -> bool:
-    for p in LOGO_CANDIDATES:
-        if os.path.exists(p):
-            st.image(p, width=width)
-            return True
-    return False
-
-
-def render_school_logo(width: int = 120) -> bool:
-    for p in LOGO_CANDIDATES:
-        if os.path.exists(p):
-            st.image(p, width=width)
-            return True
-    return False
-
-
-def render_school_logo(width: int = 120) -> bool:
-    for p in LOGO_CANDIDATES:
-        if os.path.exists(p):
-            st.image(p, width=width)
-            return True
-    return False
 
 def to_excel_bytes(sheets_dict: dict) -> bytes:
     buf = io.BytesIO()
@@ -106,6 +85,7 @@ st.markdown(
 )
 
 if not st.session_state.logged_in:
+    render_school_logo(width=140)
     st.title(f"🏫 {T['school_name']}")
     st.caption(T["school_sub"])
     st.subheader(T["login"])
@@ -147,7 +127,11 @@ with top_m:
         st.rerun()
 
 with top_r:
-    st.markdown(f"### {T['school_name']}\n**{T['school_sub']}**")
+    top_logo_col, top_title_col = st.columns([1, 3])
+    with top_logo_col:
+        render_school_logo(width=68)
+    with top_title_col:
+        st.markdown(f"### {T['school_name']}\n**{T['school_sub']}**")
 
 st.markdown("---")
 
@@ -168,6 +152,8 @@ section_keys = [
     "users",
 ]
 
+with st.sidebar:
+    render_school_logo(width=115)
 st.sidebar.markdown(f"### LEGENDS\n**{T['nav_title']}**")
 for key in section_keys:
     is_active = st.session_state.active_section == key
@@ -684,7 +670,7 @@ elif sec == "attendance":
             att_st = c1.selectbox(T["students"], list(st_map.keys()))
             att_dt = c2.date_input("Date / التاريخ / بەروار", datetime.today())
             att_status = c3.selectbox(T["attendance"], [T["present"], T["absent"], T["late"]])
-            if st.form_submit_button("💾 Save") :
+            if st.form_submit_button("💾 Save"):
                 db.add_academic_record(st_map[att_st], selected_year, att_dt, att_status, "-", "-", st.session_state.username)
                 st.rerun()
 

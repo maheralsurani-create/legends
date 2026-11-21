@@ -109,6 +109,32 @@ def add_student(academic_year, full_name, parent_name, phone, stage, grade, sect
     conn.close()
     log_action(username, "ADD_STUDENT", f"Student #{sid} ({full_name}) - {stage}/{grade}/{section} - Fee: {tuition_fee:,.0f} IQD")
 
+def update_student(student_id: int, full_name: str, parent_name: str, phone: str,
+                   stage: str, grade: str, section: str, tuition_fee: float, username: str):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("""UPDATE students
+                 SET full_name=?, parent_name=?, phone=?, stage=?, grade=?, section=?, tuition_fee=?
+                 WHERE id=?""",
+              (full_name.strip(), parent_name.strip(), phone.strip(),
+               stage, grade.strip(), section.strip(), float(tuition_fee), int(student_id)))
+    conn.commit()
+    conn.close()
+    log_action(username, "UPDATE_STUDENT", f"Updated student #{student_id} ({full_name.strip()}) - Fee: {float(tuition_fee):,.0f} IQD")
+
+def delete_student(student_id: int, username: str):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT full_name FROM students WHERE id=?", (int(student_id),))
+    row = c.fetchone()
+    st_name = row[0] if row else f"ID {student_id}"
+    c.execute("DELETE FROM student_payments WHERE student_id=?", (int(student_id),))
+    c.execute("DELETE FROM academic_records WHERE student_id=?", (int(student_id),))
+    c.execute("DELETE FROM students WHERE id=?", (int(student_id),))
+    conn.commit()
+    conn.close()
+    log_action(username, "DELETE_STUDENT", f"Deleted student #{student_id} ({st_name}) and related records")
+
 def get_students(academic_year=None):
     conn = sqlite3.connect(DB_NAME)
     if academic_year and academic_year != "ALL":
@@ -146,6 +172,16 @@ def record_student_payment(student_id: int, amount: float, pay_date, note: str, 
 def get_student_payments(student_id: int):
     conn = sqlite3.connect(DB_NAME)
     df = pd.read_sql_query("SELECT * FROM student_payments WHERE student_id=? ORDER BY id DESC", conn, params=(student_id,))
+    conn.close()
+    return df
+
+def get_all_payments():
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql_query("""SELECT p.id AS receipt_id, p.student_id, s.full_name AS student_name,
+                                     s.stage, s.grade, s.section, p.amount, p.pay_date, p.note, p.created_by
+                              FROM student_payments p
+                              LEFT JOIN students s ON p.student_id = s.id
+                              ORDER BY p.id DESC""", conn)
     conn.close()
     return df
 
@@ -197,7 +233,8 @@ def get_audit_log():
     df = pd.read_sql_query("SELECT * FROM audit_log ORDER BY id DESC LIMIT 200", conn)
     conn.close()
     return df
-    def create_user(new_username: str, new_password: str, role: str, admin_user: str):
+
+def create_user(new_username: str, new_password: str, role: str, admin_user: str):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute(
@@ -207,7 +244,6 @@ def get_audit_log():
     conn.commit()
     conn.close()
     log_action(admin_user, "MANAGE_USER", f"Saved user '{new_username.strip()}' with role '{role}'")
-
 
 def get_users():
     conn = sqlite3.connect(DB_NAME)

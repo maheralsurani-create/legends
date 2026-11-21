@@ -91,12 +91,22 @@ st.markdown(
             background: linear-gradient(135deg, #f4f7fb 0%, #eef2f7 100%);
         }}
 
-        .login-card {{
+.login-card {{
             max-width: 460px;
             margin: 28px auto 14px auto;
             background: #ffffff;
             border-radius: 18px;
             padding: 28px 28px 22px 28px;
+            box-shadow: 0 14px 35px rgba(15, 23, 42, 0.08);
+            border: 1px solid #e2e8f0;
+        }}
+
+        @media (max-width: 768px) {{
+            .login-card {{
+                margin: 12px auto 10px auto;
+                padding: 18px 16px;
+            }}
+        }}
             box-shadow: 0 14px 35px rgba(15, 23, 42, 0.08);
             border: 1px solid #e2e8f0;
         }}

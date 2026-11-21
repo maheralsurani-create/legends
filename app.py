@@ -8,7 +8,46 @@ import database as db
 
 db.init_db()
 st.set_page_config(page_title="Legends School & Kindergarten — SMS", layout="wide")
+LOGO_CANDIDATES = [
+    "logo.png",
+    "logo.jpg",
+    "logo.jpeg",
+    "logo.webp",
+    "assets/logo.png",
+    "assets/logo.jpg",
+]
 
+
+def render_school_logo(width: int = 120) -> bool:
+    for p in LOGO_CANDIDATES:
+        if os.path.exists(p):
+            st.image(p, width=width)
+            return True
+    return False
+
+
+def render_school_logo(width: int = 120) -> bool:
+    for p in LOGO_CANDIDATES:
+        if os.path.exists(p):
+            st.image(p, width=width)
+            return True
+    return False
+
+
+def render_school_logo(width: int = 120) -> bool:
+    for p in LOGO_CANDIDATES:
+        if os.path.exists(p):
+            st.image(p, width=width)
+            return True
+    return False
+
+
+def render_school_logo(width: int = 120) -> bool:
+    for p in LOGO_CANDIDATES:
+        if os.path.exists(p):
+            st.image(p, width=width)
+            return True
+    return False
 
 def to_excel_bytes(sheets_dict: dict) -> bytes:
     buf = io.BytesIO()

@@ -145,6 +145,18 @@ tx_df = db.get_transactions()
 if not tx_df.empty:
     tx_df["t_date"] = pd.to_datetime(tx_df["t_date"]).dt.date
 
+acad_df = db.get_all_academic_records(selected_year)
+teachers_df = db.get_teachers(selected_year)
+subjects_df = db.get_subjects(selected_year)
+schedules_df = db.get_schedules(selected_year)
+
+stage_labels = {
+    "all": T.get("all_stages", "All"),
+    "kg": T["stage_kg"],
+    "primary": T["stage_pri"],
+    "high": T["stage_high"],
+}
+
 sec = st.session_state.active_section
 
 if sec == "dashboard":
@@ -161,14 +173,6 @@ if sec == "dashboard":
     total_paid_val = float(st_df["paid_amount"].sum()) if not st_df.empty else 0.0
     remaining_val = max(0.0, total_fee_val - total_paid_val)
 
-    acad_all = []
-    if not st_df.empty:
-        for sid in st_df["id"].tolist():
-            adf = db.get_student_academic(int(sid))
-            if not adf.empty:
-                acad_all.append(adf)
-    acad_df = pd.concat(acad_all, ignore_index=True) if acad_all else pd.DataFrame(columns=["rec_date", "attendance", "subject", "score", "student_id"])
-
     today_str = str(datetime.today().date())
     absent_today = len(acad_df[(acad_df["rec_date"].astype(str) == today_str) & (acad_df["attendance"].astype(str).str.contains("غائب|نەبوو|Absent", case=False, na=False))]) if not acad_df.empty else 0
     present_cnt = len(acad_df[acad_df["attendance"].astype(str).str.contains("حاضر|ئامادە|Present", case=False, na=False)]) if not acad_df.empty else 0
@@ -176,8 +180,8 @@ if sec == "dashboard":
 
     cards = [
         ("#1d4ed8", T["kpi_students"], f"{total_students:,}", T["kpi_students_sub"]),
-        ("#059669", T["kpi_teachers"], "1", T["kpi_teachers_sub"]),
-        ("#7c3aed", T["kpi_stages"], "2", T["kpi_stages_sub"]),
+        ("#059669", T["kpi_teachers"], f"{len(teachers_df):,}", T["kpi_teachers_sub"]),
+        ("#7c3aed", T["kpi_stages"], "3", T["kpi_stages_sub"]),
         ("#d97706", T["kpi_absent"], f"{absent_today:,}", T["kpi_absent_sub"]),
         ("#16a34a", T["kpi_income"], f"{income_val:,.0f}", T["currency"]),
         ("#e11d48", T["kpi_rem"], f"{remaining_val:,.0f}", T["currency"]),
@@ -249,7 +253,7 @@ if sec == "dashboard":
         st.markdown('<div class="panel-box">', unsafe_allow_html=True)
         st.markdown(f"**{T['recent_activity']}**")
         if not acad_df.empty:
-            st.dataframe(acad_df[["rec_date", "student_id", "subject", "score"]].head(5), use_container_width=True, hide_index=True)
+            st.dataframe(acad_df[["rec_date", "student_name", "subject", "score"]].head(5), use_container_width=True, hide_index=True)
         else:
             st.caption(T["section_ready"])
         st.markdown("</div>", unsafe_allow_html=True)
@@ -257,14 +261,17 @@ if sec == "dashboard":
     with b_mid:
         st.markdown('<div class="panel-box">', unsafe_allow_html=True)
         st.markdown(f"**{T['today_schedule']}**")
-        st.dataframe(
-            pd.DataFrame([
-                {"Time": "08:00 - 08:45", "Class": "KG-1 / A", "Subject": "Quran & Language", "Room": "R-101"},
-                {"Time": "08:50 - 09:35", "Class": "Grade 5 / A", "Subject": "Mathematics", "Room": "R-204"},
-            ]),
-            use_container_width=True,
-            hide_index=True,
-        )
+        if not schedules_df.empty:
+            st.dataframe(schedules_df[["day_name", "time_slot", "grade", "subject_name", "room"]].head(5), use_container_width=True, hide_index=True)
+        else:
+            st.dataframe(
+                pd.DataFrame([
+                    {"Time": "08:00 - 08:45", "Class": "KG-1 / A", "Subject": "Quran & Language", "Room": "R-101"},
+                    {"Time": "08:50 - 09:35", "Class": "Grade 5 / A", "Subject": "Mathematics", "Room": "R-204"},
+                ]),
+                use_container_width=True,
+                hide_index=True,
+            )
         st.markdown("</div>", unsafe_allow_html=True)
 
     with b_right:
@@ -287,22 +294,15 @@ elif sec == "students":
     tab_add, tab_manage, tab_profile = st.tabs([
         T["add_student_btn"],
         f"{T['students']} ({T['kpi_students']})",
-        T["tab_unified"],
+        T.get("tab_unified", "Unified Profile & Receipts"),
     ])
-
-    stage_labels = {
-        "all": T["all_stages"],
-        "kg": T["stage_kg"],
-        "primary": T["stage_pri"],
-        "high": T["stage_high"],
-    }
 
     with tab_add:
         with st.form("add_st_form", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
-            full_name = c1.text_input(T["full_name"])
-            parent_name = c2.text_input(T["parent_name"])
-            phone = c3.text_input(T["phone"])
+            full_name = c1.text_input(T.get("full_name", "Full Name"))
+            parent_name = c2.text_input(T.get("parent_name", "Guardian"))
+            phone = c3.text_input(T.get("phone", "Phone"))
 
             s1, s2, s3, s4 = st.columns(4)
             st_stage = s1.selectbox(
@@ -310,10 +310,10 @@ elif sec == "students":
                 ["kg", "primary", "high"],
                 format_func=lambda x: stage_labels[x],
             )
-            st_grade = s2.text_input(T["grade"], value="KG-1")
-            st_sec = s3.text_input(T["section"], value="A")
+            st_grade = s2.text_input(T.get("grade", "Grade"), value="KG-1")
+            st_sec = s3.text_input(T.get("section", "Section"), value="A")
             fee = s4.number_input(
-                f"{T['tuition_fee']} ({T['currency']})",
+                f"{T.get('tuition_fee', 'Tuition')} ({T['currency']})",
                 min_value=0.0,
                 step=100000.0,
                 value=1500000.0,
@@ -336,9 +336,9 @@ elif sec == "students":
 
     with tab_manage:
         f_col1, f_col2 = st.columns([2, 1.3])
-        search_q = f_col1.text_input(T["search_student"], key="manage_search_q").strip().lower()
+        search_q = f_col1.text_input(T.get("search_student", "Search"), key="manage_search_q").strip().lower()
         stage_filter = f_col2.selectbox(
-            T["filter_stage"],
+            T.get("filter_stage", "Stage"),
             ["all", "kg", "primary", "high"],
             format_func=lambda x: stage_labels[x],
             key="manage_stage_filter",
@@ -358,28 +358,28 @@ elif sec == "students":
             st.dataframe(view_students, use_container_width=True, hide_index=True)
 
             st.download_button(
-                label=T["export_students_xl"],
+                label=T.get("export_students_xl", "📥 Export Students (.xlsx)"),
                 data=to_excel_bytes({"Students": view_students}),
                 file_name=f"legends_students_{stage_filter}_{selected_year}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
 
             st.markdown("---")
-            st.markdown(f"### {T['edit_del_title']}")
+            st.markdown(f"### {T.get('edit_del_title', 'Edit / Delete Student')}")
             st_choices = {
                 f"#{int(r['id'])} — {r['full_name']} ({r['grade']} / {r['section']})": int(r["id"])
                 for _, r in view_students.iterrows()
             }
             if st_choices:
-                target_label = st.selectbox(T["select_student_profile"], list(st_choices.keys()), key="edit_del_sel")
+                target_label = st.selectbox(T.get("select_student_profile", "Select Student"), list(st_choices.keys()), key="edit_del_sel")
                 target_id = st_choices[target_label]
                 target_row = st_df[st_df["id"] == target_id].iloc[0]
 
                 with st.form("edit_student_form"):
                     e1, e2, e3 = st.columns(3)
-                    e_name = e1.text_input(T["full_name"], value=str(target_row["full_name"]))
-                    e_parent = e2.text_input(T["parent_name"], value=str(target_row["parent_name"] or ""))
-                    e_phone = e3.text_input(T["phone"], value=str(target_row["phone"] or ""))
+                    e_name = e1.text_input(T.get("full_name", "Full Name"), value=str(target_row["full_name"]))
+                    e_parent = e2.text_input(T.get("parent_name", "Guardian"), value=str(target_row["parent_name"] or ""))
+                    e_phone = e3.text_input(T.get("phone", "Phone"), value=str(target_row["phone"] or ""))
 
                     e4, e5, e6, e7 = st.columns(4)
                     stage_keys = ["kg", "primary", "high"]
@@ -390,16 +390,16 @@ elif sec == "students":
                         index=cur_st_idx,
                         format_func=lambda x: stage_labels[x],
                     )
-                    e_grade = e5.text_input(T["grade"], value=str(target_row["grade"]))
-                    e_sec = e6.text_input(T["section"], value=str(target_row["section"]))
+                    e_grade = e5.text_input(T.get("grade", "Grade"), value=str(target_row["grade"]))
+                    e_sec = e6.text_input(T.get("section", "Section"), value=str(target_row["section"]))
                     e_fee = e7.number_input(
-                        f"{T['tuition_fee']} ({T['currency']})",
+                        f"{T.get('tuition_fee', 'Tuition')} ({T['currency']})",
                         min_value=0.0,
                         step=100000.0,
                         value=float(target_row["tuition_fee"]),
                     )
 
-                    if st.form_submit_button(T["save_changes"]) and e_name.strip():
+                    if st.form_submit_button(T.get("save_changes", "Save")) and e_name.strip():
                         db.update_student(
                             target_id, e_name, e_parent, e_phone,
                             e_stage, e_grade, e_sec, e_fee, st.session_state.username,
@@ -407,8 +407,8 @@ elif sec == "students":
                         st.rerun()
 
                 if st.session_state.role == "admin":
-                    confirm_del = st.checkbox(T["confirm_delete"], key="confirm_del_st")
-                    if st.button(T["delete_student_btn"], key="btn_del_st") and confirm_del:
+                    confirm_del = st.checkbox(T.get("confirm_delete", "Confirm delete"), key="confirm_del_st")
+                    if st.button(T.get("delete_student_btn", "Delete"), key="btn_del_st") and confirm_del:
                         db.delete_student(target_id, st.session_state.username)
                         st.rerun()
 
@@ -416,15 +416,12 @@ elif sec == "students":
         if not st_df.empty:
             p_col1, p_col2 = st.columns([1.3, 2.2])
             prof_stage = p_col1.selectbox(
-                T["filter_stage"],
+                T.get("filter_stage", "Stage"),
                 ["all", "kg", "primary", "high"],
                 format_func=lambda x: stage_labels[x],
                 key="prof_stage_filter",
             )
-            prof_search = p_col1.text_input(
-                T["search_student"],
-                key="prof_search_q",
-            ).strip().lower()
+            prof_search = p_col1.text_input(T.get("search_student", "Search"), key="prof_search_q").strip().lower()
 
             prof_df = st_df.copy()
             if prof_stage != "all":
@@ -440,7 +437,7 @@ elif sec == "students":
                     f"#{int(r['id'])} — {r['full_name']} ({r['grade']} / {r['section']})": int(r["id"])
                     for _, r in prof_df.iterrows()
                 }
-                prof_label = p_col2.selectbox(T["select_student_profile"], list(prof_opts.keys()), key="prof_sel")
+                prof_label = p_col2.selectbox(T.get("select_student_profile", "Select Student"), list(prof_opts.keys()), key="prof_sel")
                 sid = prof_opts[prof_label]
                 s_info = st_df[st_df["id"] == sid].iloc[0]
 
@@ -449,31 +446,18 @@ elif sec == "students":
                 rem_f = max(0.0, total_f - paid_f)
 
                 m1, m2, m3 = st.columns(3)
-                m1.metric(T["total_fees"], f"{total_f:,.0f} {T['currency']}")
-                m2.metric(T["paid_amount"], f"{paid_f:,.0f} {T['currency']}")
+                m1.metric(T.get("total_fees", "Total Fees"), f"{total_f:,.0f} {T['currency']}")
+                m2.metric(T.get("paid_amount", "Paid"), f"{paid_f:,.0f} {T['currency']}")
                 m3.metric(T["kpi_rem"], f"{rem_f:,.0f} {T['currency']}")
-
-                st.markdown(
-                    f"""
-                    <div class="panel-box">
-                        <strong>{T['full_name']}:</strong> {s_info['full_name']} |
-                        <strong>{T['parent_name']}:</strong> {s_info['parent_name']} |
-                        <strong>{T['phone']}:</strong> {s_info['phone']}<br>
-                        <strong>{T['year']}:</strong> {s_info['academic_year']} |
-                        <strong>{T['kpi_stages']}:</strong> {stage_labels.get(s_info['stage'], s_info['stage'])} — {s_info['grade']} — {s_info['section']}
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
 
                 col_pay, col_acad = st.columns(2)
                 with col_pay:
-                    st.markdown(f"#### {T['pay_box_title']}")
+                    st.markdown(f"#### {T.get('pay_box_title', 'Payments')}")
                     with st.form("unified_pay_form", clear_on_submit=True):
-                        pay_val = st.number_input(f"{T['pay_amount']} ({T['currency']})", min_value=0.0, step=50000.0)
-                        pay_dt = st.date_input(T["pay_date"], datetime.today())
-                        pay_nt = st.text_input(T["pay_note"], value="Installment")
-                        if st.form_submit_button(T["pay_receipt_btn"]) and pay_val > 0:
+                        pay_val = st.number_input(f"{T.get('pay_amount', 'Amount')} ({T['currency']})", min_value=0.0, step=50000.0)
+                        pay_dt = st.date_input(T.get("pay_date", "Date"), datetime.today())
+                        pay_nt = st.text_input(T.get("pay_note", "Note"), value="Installment")
+                        if st.form_submit_button(T.get("pay_receipt_btn", "Pay")) and pay_val > 0:
                             rcpt_no = db.record_student_payment(sid, pay_val, pay_dt, pay_nt, st.session_state.username)
                             st.session_state["last_receipt"] = {
                                 "receipt_no": rcpt_no,
@@ -492,26 +476,24 @@ elif sec == "students":
                             f"""
                             <div class="panel-box" style="border: 2px solid #059669;">
                                 <h4>{T['school_name']}</h4>
-                                <p><strong>#</strong> {lr['receipt_no']} | <strong>{T['pay_date']}:</strong> {lr['date']}</p>
-                                <p><strong>{T['full_name']}:</strong> {lr['student']} ({lr['grade']})</p>
-                                <p><strong>{T['pay_amount']}:</strong> {lr['amount']:,.0f} {T['currency']}</p>
+                                <p><strong>#</strong> {lr['receipt_no']} | <strong>{T.get('pay_date', 'Date')}:</strong> {lr['date']}</p>
+                                <p><strong>{T.get('full_name', 'Student')}:</strong> {lr['student']} ({lr['grade']})</p>
+                                <p><strong>{T.get('pay_amount', 'Amount')}:</strong> {lr['amount']:,.0f} {T['currency']}</p>
                                 <p><strong>{T['kpi_rem']}:</strong> {lr['remaining_after']:,.0f} {T['currency']}</p>
-                                <p><strong>{T['pay_note']}:</strong> {lr['note']}</p>
+                                <p><strong>{T.get('pay_note', 'Note')}:</strong> {lr['note']}</p>
                             </div>
                             """,
                             unsafe_allow_html=True,
                         )
 
-                    st_pays = db.get_student_payments(sid)
-                    st.dataframe(st_pays, use_container_width=True, hide_index=True)
+                    st.dataframe(db.get_student_payments(sid), use_container_width=True, hide_index=True)
 
                 with col_acad:
-                    st.markdown(f"#### {T['acad_history_title']}")
-                    st_acad = db.get_student_academic(sid)
-                    st.dataframe(st_acad, use_container_width=True, hide_index=True)
+                    st.markdown(f"#### {T.get('acad_history_title', 'Academic History')}")
+                    st.dataframe(db.get_student_academic(sid), use_container_width=True, hide_index=True)
 
                 st.download_button(
-                    label=T["export_profile_xl"],
+                    label=T.get("export_profile_xl", "📥 Export Profile (.xlsx)"),
                     data=to_excel_bytes({
                         "Student_Info": pd.DataFrame([s_info.to_dict()]),
                         "Payments": db.get_student_payments(sid),
@@ -520,6 +502,219 @@ elif sec == "students":
                     file_name=f"student_{sid}_profile.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
+
+elif sec == "teachers":
+    st.subheader(f"{T['teachers']} — {selected_year}")
+    with st.form("add_teacher_form", clear_on_submit=True):
+        c1, c2, c3 = st.columns(3)
+        t_name = c1.text_input(T.get("full_name", "Full Name"))
+        t_spec = c2.text_input("Specialty / التخصص / پسپۆڕی")
+        t_phone = c3.text_input(T.get("phone", "Phone"))
+        c4, c5 = st.columns(2)
+        t_stage = c4.selectbox(T["kpi_stages"], ["kg", "primary", "high"], format_func=lambda x: stage_labels[x])
+        t_grade = c5.text_input(T.get("grade", "Grade"), value="All Grades")
+        if st.form_submit_button("+ Teacher") and t_name.strip():
+            db.add_teacher(selected_year, t_name, t_spec, t_phone, t_stage, t_grade, st.session_state.username)
+            st.rerun()
+
+    if not teachers_df.empty:
+        st.dataframe(teachers_df, use_container_width=True, hide_index=True)
+        st.download_button(
+            "📥 Excel (.xlsx)",
+            data=to_excel_bytes({"Teachers": teachers_df}),
+            file_name=f"legends_teachers_{selected_year}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        if st.session_state.role == "admin":
+            t_opts = {f"#{int(r['id'])} — {r['full_name']}": int(r["id"]) for _, r in teachers_df.iterrows()}
+            del_t_sel = st.selectbox("Delete Teacher", list(t_opts.keys()), key="del_t_sel")
+            if st.button("🗑️ Delete", key="btn_del_t"):
+                db.delete_teacher(t_opts[del_t_sel], st.session_state.username)
+                st.rerun()
+
+elif sec == "parents":
+    st.subheader(f"{T['parents']} — {selected_year}")
+    if not st_df.empty:
+        p_search = st.text_input(T.get("search_student", "Search"), key="parent_search_q").strip().lower()
+        p_view = st_df[["id", "full_name", "parent_name", "phone", "stage", "grade", "section", "tuition_fee", "paid_amount"]].copy()
+        p_view["remaining"] = p_view["tuition_fee"] - p_view["paid_amount"]
+        if p_search:
+            p_view = p_view[
+                p_view["parent_name"].astype(str).str.lower().str.contains(p_search, na=False)
+                | p_view["full_name"].astype(str).str.lower().str.contains(p_search, na=False)
+                | p_view["phone"].astype(str).str.lower().str.contains(p_search, na=False)
+            ]
+        st.dataframe(p_view, use_container_width=True, hide_index=True)
+        st.download_button(
+            "📥 Excel (.xlsx)",
+            data=to_excel_bytes({"Parents": p_view}),
+            file_name=f"legends_parents_{selected_year}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    else:
+        st.info(T["section_ready"])
+
+elif sec == "stages":
+    st.subheader(f"{T['stages']} — {selected_year}")
+    st_rows = []
+    for s_key in ["kg", "primary", "high"]:
+        s_students = len(st_df[st_df["stage"] == s_key]) if not st_df.empty else 0
+        s_teachers = len(teachers_df[teachers_df["stage"] == s_key]) if not teachers_df.empty else 0
+        s_subjects = len(subjects_df[subjects_df["stage"] == s_key]) if not subjects_df.empty else 0
+        s_sched = len(schedules_df[schedules_df["stage"] == s_key]) if not schedules_df.empty else 0
+        st_rows.append({
+            T["kpi_stages"]: stage_labels[s_key],
+            T["students"]: s_students,
+            T["teachers"]: s_teachers,
+            T["subjects"]: s_subjects,
+            T["schedule"]: s_sched,
+        })
+    stages_summary_df = pd.DataFrame(st_rows)
+    st.dataframe(stages_summary_df, use_container_width=True, hide_index=True)
+    st.download_button(
+        "📥 Excel (.xlsx)",
+        data=to_excel_bytes({"Stages_Summary": stages_summary_df}),
+        file_name=f"legends_stages_{selected_year}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+elif sec == "subjects":
+    st.subheader(f"{T['subjects']} — {selected_year}")
+    with st.form("add_subject_form", clear_on_submit=True):
+        c1, c2, c3, c4 = st.columns(4)
+        sub_stage = c1.selectbox(T["kpi_stages"], ["kg", "primary", "high"], format_func=lambda x: stage_labels[x])
+        sub_grade = c2.text_input(T.get("grade", "Grade"), value="Grade 1")
+        sub_name = c3.text_input("Subject / المادة / وانە")
+        sub_teacher = c4.text_input(T["teachers"])
+        if st.form_submit_button("+ Subject") and sub_name.strip():
+            db.add_subject(selected_year, sub_stage, sub_grade, sub_name, sub_teacher, st.session_state.username)
+            st.rerun()
+
+    if not subjects_df.empty:
+        st.dataframe(subjects_df, use_container_width=True, hide_index=True)
+        st.download_button(
+            "📥 Excel (.xlsx)",
+            data=to_excel_bytes({"Subjects": subjects_df}),
+            file_name=f"legends_subjects_{selected_year}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        if st.session_state.role == "admin":
+            sub_opts = {f"#{int(r['id'])} — {r['subject_name']} ({r['grade']})": int(r["id"]) for _, r in subjects_df.iterrows()}
+            del_sub_sel = st.selectbox("Delete Subject", list(sub_opts.keys()), key="del_sub_sel")
+            if st.button("🗑️ Delete", key="btn_del_sub"):
+                db.delete_subject(sub_opts[del_sub_sel], st.session_state.username)
+                st.rerun()
+
+elif sec == "schedule":
+    st.subheader(f"{T['schedule']} — {selected_year}")
+    with st.form("add_sched_form", clear_on_submit=True):
+        c1, c2, c3, c4 = st.columns(4)
+        sc_day = c1.selectbox("Day / اليوم / ڕۆژ", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
+        sc_time = c2.text_input("Time / الوقت / کات", value="08:00 - 08:45")
+        sc_stage = c3.selectbox(T["kpi_stages"], ["kg", "primary", "high"], format_func=lambda x: stage_labels[x])
+        sc_grade = c4.text_input(T.get("grade", "Grade"), value="Grade 1")
+        c5, c6, c7 = st.columns(3)
+        sc_sec = c5.text_input(T.get("section", "Section"), value="A")
+        sc_subj = c6.text_input("Subject / المادة / وانە")
+        sc_room = c7.text_input("Room / القاعة / ژوور", value="R-101")
+        if st.form_submit_button("+ Schedule") and sc_subj.strip():
+            db.add_schedule(selected_year, sc_day, sc_time, sc_stage, sc_grade, sc_sec, sc_subj, sc_room, st.session_state.username)
+            st.rerun()
+
+    if not schedules_df.empty:
+        st.dataframe(schedules_df, use_container_width=True, hide_index=True)
+        st.download_button(
+            "📥 Excel (.xlsx)",
+            data=to_excel_bytes({"Schedule": schedules_df}),
+            file_name=f"legends_schedule_{selected_year}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        if st.session_state.role == "admin":
+            sc_opts = {f"#{int(r['id'])} — {r['day_name']} {r['time_slot']} ({r['subject_name']})": int(r["id"]) for _, r in schedules_df.iterrows()}
+            del_sc_sel = st.selectbox("Delete Slot", list(sc_opts.keys()), key="del_sc_sel")
+            if st.button("🗑️ Delete", key="btn_del_sc"):
+                db.delete_schedule(sc_opts[del_sc_sel], st.session_state.username)
+                st.rerun()
+
+elif sec == "attendance":
+    st.subheader(f"{T['attendance']} — {selected_year}")
+    if not st_df.empty:
+        st_map = {f"#{int(r['id'])} — {r['full_name']} ({r['grade']} / {r['section']})": int(r["id"]) for _, r in st_df.iterrows()}
+        with st.form("att_form", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            att_st = c1.selectbox(T["students"], list(st_map.keys()))
+            att_dt = c2.date_input("Date / التاريخ / بەروار", datetime.today())
+            att_status = c3.selectbox(T["attendance"], [T["present"], T["absent"], T["late"]])
+            if st.form_submit_button("💾 Save") :
+                db.add_academic_record(st_map[att_st], selected_year, att_dt, att_status, "-", "-", st.session_state.username)
+                st.rerun()
+
+    if not acad_df.empty:
+        st.dataframe(acad_df, use_container_width=True, hide_index=True)
+        st.download_button(
+            "📥 Excel (.xlsx)",
+            data=to_excel_bytes({"Attendance": acad_df}),
+            file_name=f"legends_attendance_{selected_year}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+elif sec == "exams":
+    st.subheader(f"{T['exams']} — {selected_year}")
+    if not st_df.empty:
+        st_map = {f"#{int(r['id'])} — {r['full_name']} ({r['grade']} / {r['section']})": int(r["id"]) for _, r in st_df.iterrows()}
+        with st.form("exam_form", clear_on_submit=True):
+            c1, c2, c3, c4 = st.columns(4)
+            ex_st = c1.selectbox(T["students"], list(st_map.keys()))
+            ex_dt = c2.date_input("Date / التاريخ / بەروار", datetime.today())
+            ex_subj = c3.text_input("Subject / المادة / وانە", value="Mathematics")
+            ex_score = c4.text_input("Score / الدرجة / نمرە", value="95 / 100")
+            if st.form_submit_button("💾 Save") and ex_subj.strip() and ex_score.strip():
+                db.add_academic_record(st_map[ex_st], selected_year, ex_dt, T["present"], ex_subj, ex_score, st.session_state.username)
+                st.rerun()
+
+    if not acad_df.empty:
+        st.dataframe(acad_df, use_container_width=True, hide_index=True)
+        st.download_button(
+            "📥 Excel (.xlsx)",
+            data=to_excel_bytes({"Exams": acad_df}),
+            file_name=f"legends_exams_{selected_year}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+elif sec == "certificates":
+    st.subheader(f"{T['certificates']} — {selected_year}")
+    if not st_df.empty:
+        cert_map = {f"#{int(r['id'])} — {r['full_name']} ({r['grade']} / {r['section']})": int(r["id"]) for _, r in st_df.iterrows()}
+        cert_sel = st.selectbox(T["students"], list(cert_map.keys()), key="cert_sel")
+        cid = cert_map[cert_sel]
+        c_row = st_df[st_df["id"] == cid].iloc[0]
+        c_acad = db.get_student_academic(cid)
+
+        st.markdown(
+            f"""
+            <div class="panel-box" style="border: 2px solid #1d4ed8;">
+                <h3>{T['school_name']}</h3>
+                <p>{T['school_sub']}</p>
+                <hr>
+                <p><strong>{T.get('full_name', 'Student')}:</strong> {c_row['full_name']}</p>
+                <p><strong>{T['year']}:</strong> {c_row['academic_year']} | <strong>{T['kpi_stages']}:</strong> {stage_labels.get(c_row['stage'], c_row['stage'])} — {c_row['grade']} / {c_row['section']}</p>
+                <p><strong>{T.get('parent_name', 'Guardian')}:</strong> {c_row['parent_name']} | <strong>{T.get('phone', 'Phone')}:</strong> {c_row['phone']}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.dataframe(c_acad, use_container_width=True, hide_index=True)
+        st.download_button(
+            "📥 Excel (.xlsx)",
+            data=to_excel_bytes({
+                "Certificate_Student": pd.DataFrame([c_row.to_dict()]),
+                "Grades_Attendance": c_acad,
+            }),
+            file_name=f"certificate_student_{cid}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    else:
+        st.info(T["section_ready"])
 
 elif sec == "finance":
     st.subheader(T["finance"])
@@ -538,7 +733,7 @@ elif sec == "finance":
     st.markdown("---")
     with st.form("tx_form", clear_on_submit=True):
         c1, c2, c3, c4 = st.columns(4)
-        t_stage = c1.selectbox(T["kpi_stages"], ["kg", "primary", "high"], format_func=lambda x: {"kg": T["stage_kg"], "primary": T["stage_pri"], "high": T["stage_high"]}[x])
+        t_stage = c1.selectbox(T["kpi_stages"], ["kg", "primary", "high"], format_func=lambda x: stage_labels[x])
         t_type = c2.selectbox("Type / النوع", ["income", "expense"])
         t_cat = c3.text_input("Category / البند", value="رسوم / مصروفات")
         t_amt = c4.number_input(f"Amount ({T['currency']})", min_value=0.0, step=50000.0)
@@ -552,7 +747,7 @@ elif sec == "finance":
     if not tx_df.empty:
         st.dataframe(tx_df, use_container_width=True, hide_index=True)
         st.download_button(
-            label="📥 تصدير حركات الخزينة إلى Excel (.xlsx)",
+            label="📥 Excel (.xlsx)",
             data=to_excel_bytes({"Treasury_Transactions": tx_df}),
             file_name=f"legends_transactions_{selected_year}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -563,11 +758,11 @@ elif sec == "reports":
 
     stage_rows = []
     f_tx_year = tx_df[tx_df["academic_year"] == selected_year] if not tx_df.empty else tx_df
-    for s_key, s_label in [("kg", T["stage_kg"]), ("primary", T["stage_pri"]), ("high", T["stage_high"])]:
+    for s_key in ["kg", "primary", "high"]:
         s_inc = float(f_tx_year[(f_tx_year["stage"] == s_key) & (f_tx_year["t_type"] == "income")]["amount"].sum()) if not f_tx_year.empty else 0.0
         s_exp = float(f_tx_year[(f_tx_year["stage"] == s_key) & (f_tx_year["t_type"] == "expense")]["amount"].sum()) if not f_tx_year.empty else 0.0
         stage_rows.append({
-            T["kpi_stages"]: s_label,
+            T["kpi_stages"]: stage_labels[s_key],
             T["kpi_income"]: s_inc,
             "Expenses": s_exp,
             "Net Budget": s_inc - s_exp,
@@ -594,7 +789,7 @@ elif sec == "reports":
 
         st.dataframe(rep, use_container_width=True, hide_index=True)
         st.download_button(
-            "📥 تصدير كافة التقارير إلى Excel (.xlsx)",
+            "📥 Excel (.xlsx)",
             data=to_excel_bytes({
                 "Transactions_Report": rep,
                 "Stages_Budget": budget_df,

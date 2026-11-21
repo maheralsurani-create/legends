@@ -39,8 +39,8 @@ def init_db():
                 )""")
 
     c.execute("PRAGMA table_info(students)")
-    cols = [row[1] for row in c.fetchall()]
-    if "paid_amount" not in cols:
+    st_cols = [row[1] for row in c.fetchall()]
+    if "paid_amount" not in st_cols:
         c.execute("ALTER TABLE students ADD COLUMN paid_amount REAL DEFAULT 0.0")
 
     c.execute("""CREATE TABLE IF NOT EXISTS student_payments (
@@ -75,6 +75,22 @@ def init_db():
                     student_id INTEGER,
                     created_by TEXT
                 )""")
+
+    c.execute("PRAGMA table_info(transactions)")
+    tx_cols = [row[1] for row in c.fetchall()]
+    for col_name, col_def in [
+        ("academic_year", "TEXT"),
+        ("stage", "TEXT"),
+        ("t_type", "TEXT"),
+        ("category", "TEXT"),
+        ("amount", "REAL"),
+        ("description", "TEXT"),
+        ("t_date", "DATE"),
+        ("student_id", "INTEGER"),
+        ("created_by", "TEXT"),
+    ]:
+        if col_name not in tx_cols:
+            c.execute(f"ALTER TABLE transactions ADD COLUMN {col_name} {col_def}")
 
     c.execute("""CREATE TABLE IF NOT EXISTS audit_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -163,49 +179,31 @@ def get_students(academic_year=None):
 def record_student_payment(student_id: int, amount: float, pay_date, note: str, username: str):
     conn = sqlite3.connect(DB_NAME, timeout=30)
     c = conn.cursor()
-    c.execute("SELECT full_name, stage, academic_year, COALESCE(paid_amount, 0.0) FROM students WHERE id=?", (int(student_id),))
+    c.execute(
+        "SELECT full_name, stage, academic_year, COALESCE(paid_amount, 0.0) FROM students WHERE id=?",
+        (int(student_id),),
+    )
     st = c.fetchone()
     if not st:
         conn.close()
         return None
+
     full_name, stage, yr, cur_paid = st
     amt = float(amount)
     new_paid = float(cur_paid) + amt
 
     c.execute("UPDATE students SET paid_amount=? WHERE id=?", (new_paid, int(student_id)))
-    c.execute("INSERT INTO student_payments (student_id, amount, pay_date, note, created_by) VALUES (?, ?, ?, ?, ?)",
-              (int(student_id), amt, str(pay_date), note, username))
+    c.execute(
+        "INSERT INTO student_payments (student_id, amount, pay_date, note, created_by) VALUES (?, ?, ?, ?, ?)",
+        (int(student_id), amt, str(pay_date), note, username),
+    )
     receipt_id = c.lastrowid
-c.execute("""CREATE TABLE IF NOT EXISTS transactions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    academic_year TEXT,
-                    stage TEXT,
-                    t_type TEXT,
-                    category TEXT,
-                    amount REAL,
-                    description TEXT,
-                    t_date DATE,
-                    student_id INTEGER,
-                    created_by TEXT
-                )""")
-
-    c.execute("PRAGMA table_info(transactions)")
-    tx_cols = [row[1] for row in c.fetchall()]
-    for col_name, col_def in [
-        ("academic_year", "TEXT"),
-        ("stage", "TEXT"),
-        ("t_type", "TEXT"),
-        ("category", "TEXT"),
-        ("amount", "REAL"),
-        ("description", "TEXT"),
-        ("t_date", "DATE"),
-        ("student_id", "INTEGER"),
-        ("created_by", "TEXT"),
-    ]:
-        if col_name not in tx_cols:
-            c.execute(f"ALTER TABLE transactions ADD COLUMN {col_name} {col_def}")                 (academic_year, stage, t_type, category, amount, description, t_date, student_id, created_by)
-                 VALUES (?, ?, 'income', 'Tuition / رسوم دراسية', ?, ?, ?, ?, ?)""",
-              (yr, stage, amt, f"Receipt #{receipt_id} - {full_name} ({note})", str(pay_date), int(student_id), username))
+    c.execute(
+        """INSERT INTO transactions
+           (academic_year, stage, t_type, category, amount, description, t_date, student_id, created_by)
+           VALUES (?, ?, 'income', 'Tuition / رسوم دراسية', ?, ?, ?, ?, ?)""",
+        (yr, stage, amt, f"Receipt #{receipt_id} - {full_name} ({note})", str(pay_date), int(student_id), username),
+    )
     conn.commit()
     conn.close()
     log_action(username, "PAYMENT_RECEIPT", f"Receipt #{receipt_id} for {full_name} (#{student_id}): {amt:,.0f} IQD")

@@ -523,3 +523,25 @@ def get_users():
     df = pd.read_sql_query("SELECT username, role FROM users ORDER BY username ASC", conn)
     conn.close()
     return df
+    import os
+
+
+def reset_all_data(username: str):
+    safety_file = f"{DB_NAME}.pre_reset.bak"
+    if os.path.exists(DB_NAME):
+        try:
+            with open(DB_NAME, "rb") as src, open(safety_file, "wb") as dst:
+                dst.write(src.read())
+        except OSError:
+            pass
+
+    for suffix in ["", "-wal", "-shm", "-journal"]:
+        target = f"{DB_NAME}{suffix}"
+        if os.path.exists(target):
+            try:
+                os.remove(target)
+            except OSError:
+                pass
+
+    init_db()
+    log_action(username, "FACTORY_RESET", "Wiped all school records and reinitialized clean database")

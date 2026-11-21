@@ -176,8 +176,34 @@ def record_student_payment(student_id: int, amount: float, pay_date, note: str, 
     c.execute("INSERT INTO student_payments (student_id, amount, pay_date, note, created_by) VALUES (?, ?, ?, ?, ?)",
               (int(student_id), amt, str(pay_date), note, username))
     receipt_id = c.lastrowid
-    c.execute("""INSERT INTO transactions
-                 (academic_year, stage, t_type, category, amount, description, t_date, student_id, created_by)
+c.execute("""CREATE TABLE IF NOT EXISTS transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    academic_year TEXT,
+                    stage TEXT,
+                    t_type TEXT,
+                    category TEXT,
+                    amount REAL,
+                    description TEXT,
+                    t_date DATE,
+                    student_id INTEGER,
+                    created_by TEXT
+                )""")
+
+    c.execute("PRAGMA table_info(transactions)")
+    tx_cols = [row[1] for row in c.fetchall()]
+    for col_name, col_def in [
+        ("academic_year", "TEXT"),
+        ("stage", "TEXT"),
+        ("t_type", "TEXT"),
+        ("category", "TEXT"),
+        ("amount", "REAL"),
+        ("description", "TEXT"),
+        ("t_date", "DATE"),
+        ("student_id", "INTEGER"),
+        ("created_by", "TEXT"),
+    ]:
+        if col_name not in tx_cols:
+            c.execute(f"ALTER TABLE transactions ADD COLUMN {col_name} {col_def}")                 (academic_year, stage, t_type, category, amount, description, t_date, student_id, created_by)
                  VALUES (?, ?, 'income', 'Tuition / رسوم دراسية', ?, ?, ?, ?, ?)""",
               (yr, stage, amt, f"Receipt #{receipt_id} - {full_name} ({note})", str(pay_date), int(student_id), username))
     conn.commit()

@@ -229,7 +229,6 @@ if not st.session_state.logged_in:
                         st.error(T["wrong_creds"])
     st.stop()
 
-# الشريط العلوي العصري
 st.markdown('<div class="top-header-card">', unsafe_allow_html=True)
 top_l, top_m, top_r = st.columns([2.3, 3.8, 3.1])
 with top_l:
@@ -259,7 +258,6 @@ with top_r:
         st.markdown(f"### {T['school_name']}\n<span style='color:#64748b;font-size:13px;'>{T['school_sub']}</span>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
-# القائمة الجانبية
 section_keys = [
     "dashboard",
     "students",
@@ -902,7 +900,7 @@ elif sec == "finance":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-    elif sec == "reports":
+elif sec == "reports":
     st.subheader(T["reports"])
 
     stage_rows = []
@@ -948,6 +946,46 @@ elif sec == "finance":
             file_name=f"legends_full_report_{period}_{ref_d}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+
+    st.markdown("---")
+    st.markdown(f"### {T.get('backup_restore_title', 'Backup & Restore (.db)')}")
+    db.init_db()
+    b_col1, b_col2 = st.columns(2)
+
+    with b_col1:
+        if os.path.exists(db.DB_NAME):
+            with open(db.DB_NAME, "rb") as fp:
+                db_bytes = fp.read()
+            st.download_button(
+                label=T.get("backup_btn", "📥 Backup (.db)"),
+                data=db_bytes,
+                file_name=f"legends_backup_{datetime.today().strftime('%Y%m%d_%H%M')}.db",
+                mime="application/octet-stream",
+                use_container_width=True,
+            )
+
+    with b_col2:
+        if st.session_state.role == "admin":
+            up_db = st.file_uploader(T.get("restore_label", "Restore (.db)"), type=["db"], key="restore_db_uploader")
+            if up_db is not None:
+                uploaded_bytes = up_db.getbuffer().tobytes()
+                if not is_valid_sqlite_db(uploaded_bytes):
+                    st.error(T.get("invalid_db_file", "الملف المرفوع ليس قاعدة بيانات SQLite صالحة."))
+                else:
+                    if st.button(T.get("confirm_restore_btn", "♻️ تأكيد استعادة قاعدة البيانات"), key="btn_confirm_restore"):
+                        safety_copy = f"{db.DB_NAME}.bak"
+                        if os.path.exists(db.DB_NAME):
+                            with open(db.DB_NAME, "rb") as cur_fp, open(safety_copy, "wb") as bak_fp:
+                                bak_fp.write(cur_fp.read())
+                        with open(db.DB_NAME, "wb") as out_f:
+                            out_f.write(uploaded_bytes)
+                        db.init_db()
+                        db.log_action(st.session_state.username, "RESTORE_DB", f"Restored database from {up_db.name}")
+                        st.success(T.get("restore_success", "تمت استعادة قاعدة البيانات وترقيتها بنجاح."))
+                        st.rerun()
+        else:
+            st.info(T.get("admin_only_restore", "استعادة قاعدة البيانات متاحة لمدير النظام (Admin) فقط."))
+
     st.markdown("---")
     st.markdown("### ⚠️ إعادة ضبط البرنامج وحذف كافة البيانات (Factory Reset)")
     if st.session_state.role == "admin":
@@ -971,28 +1009,6 @@ elif sec == "finance":
                 st.rerun()
     else:
         st.info("حذف كافة البيانات وإعادة ضبط البرنامج متاح لمدير النظام (Admin) فقط.")
-
-    with b_col2:
-        if st.session_state.role == "admin":
-            up_db = st.file_uploader(T.get("restore_label", "Restore (.db)"), type=["db"], key="restore_db_uploader")
-            if up_db is not None:
-                uploaded_bytes = up_db.getbuffer().tobytes()
-                if not is_valid_sqlite_db(uploaded_bytes):
-                    st.error(T.get("invalid_db_file", "الملف المرفوع ليس قاعدة بيانات SQLite صالحة."))
-                else:
-                    if st.button(T.get("confirm_restore_btn", "♻️ تأكيد استعادة قاعدة البيانات"), key="btn_confirm_restore"):
-                        safety_copy = f"{db.DB_NAME}.bak"
-                        if os.path.exists(db.DB_NAME):
-                            with open(db.DB_NAME, "rb") as cur_fp, open(safety_copy, "wb") as bak_fp:
-                                bak_fp.write(cur_fp.read())
-                        with open(db.DB_NAME, "wb") as out_f:
-                            out_f.write(uploaded_bytes)
-                        db.init_db()
-                        db.log_action(st.session_state.username, "RESTORE_DB", f"Restored database from {up_db.name}")
-                        st.success(T.get("restore_success", "تمت استعادة قاعدة البيانات وترقيتها بنجاح."))
-                        st.rerun()
-        else:
-            st.info(T.get("admin_only_restore", "استعادة قاعدة البيانات متاحة لمدير النظام (Admin) فقط."))
 
     st.markdown("---")
     st.dataframe(db.get_audit_log(), use_container_width=True, hide_index=True)

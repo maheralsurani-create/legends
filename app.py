@@ -7,7 +7,10 @@ from translations import UI_TEXT
 import database as db
 
 db.init_db()
-st.set_page_configdef to_excel_bytes(sheets_dict: dict) -> bytes:
+st.set_page_config(page_title="Legends School & Kindergarten — SMS", layout="wide")
+
+
+def to_excel_bytes(sheets_dict: dict) -> bytes:
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
         for sheet_name, df_item in sheets_dict.items():
@@ -16,8 +19,7 @@ st.set_page_configdef to_excel_bytes(sheets_dict: dict) -> bytes:
                 df_item.to_excel(writer, index=False, sheet_name=safe_name)
             else:
                 pd.DataFrame({"Info": ["No data"]}).to_excel(writer, index=False, sheet_name=safe_name)
-    return buf.getvalue()(page_title="Legends School & Kindergarten — SMS", layout="wide")
-
+    return buf.getvalue()
 if "lang" not in st.session_state:
     st.session_state.lang = "ar"
 if "logged_in" not in st.session_state:

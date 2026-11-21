@@ -949,22 +949,29 @@ elif sec == "reports":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-    st.markdown("---")
-    st.markdown(f"### {T.get('backup_restore_title', 'Backup & Restore (.db)')}")
-    db.init_db()
-    b_col1, b_col2 = st.columns(2)
+st.markdown("---")
+    st.markdown("### ⚠️ إعادة ضبط البرنامج وحذف كافة البيانات (Factory Reset)")
+    if st.session_state.role == "admin":
+        st.caption("سيتم حذف جميع البيانات الحالية وإعادة تهيئة قاعدة البيانات فارغة وجاهزة من جديد مع الاحتفاظ بنسخة أمان مؤقتة على الخادم.")
+        confirm_reset = st.checkbox(
+            "أؤكد أنني أريد حذف كافة البيانات والملفات المسجلة وإعادة البرنامج جديداً من البداية",
+            key="confirm_factory_reset",
+        )
+        confirm_word = st.text_input(
+            "اكتب كلمة RESET للتأكيد النهائي",
+            key="confirm_reset_word",
+        ).strip()
 
-    with b_col1:
-        if os.path.exists(db.DB_NAME):
-            with open(db.DB_NAME, "rb") as fp:
-                db_bytes = fp.read()
-            st.download_button(
-                label=T.get("backup_btn", "📥 Backup (.db)"),
-                data=db_bytes,
-                file_name=f"legends_backup_{datetime.today().strftime('%Y%m%d_%H%M')}.db",
-                mime="application/octet-stream",
-                use_container_width=True,
-            )
+        if st.button("🧨 حذف كافة البيانات وإعادة البرنامج جديداً", key="btn_factory_reset"):
+            if not confirm_reset or confirm_word != "RESET":
+                st.error("يرجى تفعيل مربع التأكيد وكتابة كلمة RESET أولاً.")
+            else:
+                db.reset_all_data(st.session_state.username)
+                st.session_state.pop("last_receipt", None)
+                st.success("تم حذف كافة البيانات وإعادة تهيئة البرنامج جديداً بنجاح.")
+                st.rerun()
+    else:
+        st.info("حذف كافة البيانات وإعادة ضبط البرنامج متاح لمدير النظام (Admin) فقط.")
 
     with b_col2:
         if st.session_state.role == "admin":

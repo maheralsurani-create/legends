@@ -98,6 +98,37 @@ def init_db():
             except sqlite3.OperationalError:
                 pass
 
+    c.execute("""CREATE TABLE IF NOT EXISTS teachers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    academic_year TEXT,
+                    full_name TEXT,
+                    specialty TEXT,
+                    phone TEXT,
+                    stage TEXT,
+                    grade TEXT
+                )""")
+
+    c.execute("""CREATE TABLE IF NOT EXISTS subjects (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    academic_year TEXT,
+                    stage TEXT,
+                    grade TEXT,
+                    subject_name TEXT,
+                    teacher_name TEXT
+                )""")
+
+    c.execute("""CREATE TABLE IF NOT EXISTS schedules (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    academic_year TEXT,
+                    day_name TEXT,
+                    time_slot TEXT,
+                    stage TEXT,
+                    grade TEXT,
+                    section TEXT,
+                    subject_name TEXT,
+                    room TEXT
+                )""")
+
     c.execute("""CREATE TABLE IF NOT EXISTS audit_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp TEXT,
@@ -291,6 +322,150 @@ def get_student_academic(student_id: int):
     )
     conn.close()
     return df
+
+
+def get_all_academic_records(academic_year=None):
+    conn = sqlite3.connect(DB_NAME, timeout=30)
+    if academic_year and academic_year != "ALL":
+        df = pd.read_sql_query(
+            """SELECT a.id, a.student_id, s.full_name AS student_name, s.stage, s.grade, s.section,
+                      a.academic_year, a.rec_date, a.attendance, a.subject, a.score, a.created_by
+               FROM academic_records a
+               LEFT JOIN students s ON a.student_id = s.id
+               WHERE a.academic_year=?
+               ORDER BY a.rec_date DESC, a.id DESC""",
+            conn,
+            params=(academic_year,),
+        )
+    else:
+        df = pd.read_sql_query(
+            """SELECT a.id, a.student_id, s.full_name AS student_name, s.stage, s.grade, s.section,
+                      a.academic_year, a.rec_date, a.attendance, a.subject, a.score, a.created_by
+               FROM academic_records a
+               LEFT JOIN students s ON a.student_id = s.id
+               ORDER BY a.rec_date DESC, a.id DESC""",
+            conn,
+        )
+    conn.close()
+    return df
+
+
+def delete_academic_record(record_id: int, username: str):
+    conn = sqlite3.connect(DB_NAME, timeout=30)
+    c = conn.cursor()
+    c.execute("DELETE FROM academic_records WHERE id=?", (int(record_id),))
+    conn.commit()
+    conn.close()
+    log_action(username, "DELETE_ACADEMIC", f"Deleted academic record #{record_id}")
+
+
+def add_teacher(academic_year: str, full_name: str, specialty: str, phone: str, stage: str, grade: str, username: str):
+    conn = sqlite3.connect(DB_NAME, timeout=30)
+    c = conn.cursor()
+    c.execute(
+        """INSERT INTO teachers (academic_year, full_name, specialty, phone, stage, grade)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (academic_year, full_name.strip(), specialty.strip(), phone.strip(), stage, grade.strip()),
+    )
+    tid = c.lastrowid
+    conn.commit()
+    conn.close()
+    log_action(username, "ADD_TEACHER", f"Teacher #{tid} ({full_name.strip()}) - {specialty.strip()}")
+
+
+def get_teachers(academic_year=None):
+    conn = sqlite3.connect(DB_NAME, timeout=30)
+    if academic_year and academic_year != "ALL":
+        df = pd.read_sql_query("SELECT * FROM teachers WHERE academic_year=? ORDER BY id DESC", conn, params=(academic_year,))
+    else:
+        df = pd.read_sql_query("SELECT * FROM teachers ORDER BY id DESC", conn)
+    conn.close()
+    return df
+
+
+def delete_teacher(teacher_id: int, username: str):
+    conn = sqlite3.connect(DB_NAME, timeout=30)
+    c = conn.cursor()
+    c.execute("DELETE FROM teachers WHERE id=?", (int(teacher_id),))
+    conn.commit()
+    conn.close()
+    log_action(username, "DELETE_TEACHER", f"Deleted teacher #{teacher_id}")
+
+
+def add_subject(academic_year: str, stage: str, grade: str, subject_name: str, teacher_name: str, username: str):
+    conn = sqlite3.connect(DB_NAME, timeout=30)
+    c = conn.cursor()
+    c.execute(
+        """INSERT INTO subjects (academic_year, stage, grade, subject_name, teacher_name)
+           VALUES (?, ?, ?, ?, ?)""",
+        (academic_year, stage, grade.strip(), subject_name.strip(), teacher_name.strip()),
+    )
+    sub_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    log_action(username, "ADD_SUBJECT", f"Subject #{sub_id} ({subject_name.strip()}) - {stage}/{grade.strip()}")
+
+
+def get_subjects(academic_year=None):
+    conn = sqlite3.connect(DB_NAME, timeout=30)
+    if academic_year and academic_year != "ALL":
+        df = pd.read_sql_query("SELECT * FROM subjects WHERE academic_year=? ORDER BY id DESC", conn, params=(academic_year,))
+    else:
+        df = pd.read_sql_query("SELECT * FROM subjects ORDER BY id DESC", conn)
+    conn.close()
+    return df
+
+
+def delete_subject(subject_id: int, username: str):
+    conn = sqlite3.connect(DB_NAME, timeout=30)
+    c = conn.cursor()
+    c.execute("DELETE FROM subjects WHERE id=?", (int(subject_id),))
+    conn.commit()
+    conn.close()
+    log_action(username, "DELETE_SUBJECT", f"Deleted subject #{subject_id}")
+
+
+def add_schedule(
+    academic_year: str,
+    day_name: str,
+    time_slot: str,
+    stage: str,
+    grade: str,
+    section: str,
+    subject_name: str,
+    room: str,
+    username: str,
+):
+    conn = sqlite3.connect(DB_NAME, timeout=30)
+    c = conn.cursor()
+    c.execute(
+        """INSERT INTO schedules (academic_year, day_name, time_slot, stage, grade, section, subject_name, room)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (academic_year, day_name, time_slot.strip(), stage, grade.strip(), section.strip(), subject_name.strip(), room.strip()),
+    )
+    sch_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    log_action(username, "ADD_SCHEDULE", f"Schedule #{sch_id} ({day_name} {time_slot.strip()}) - {subject_name.strip()}")
+
+
+def get_schedules(academic_year=None):
+    conn = sqlite3.connect(DB_NAME, timeout=30)
+    if academic_year and academic_year != "ALL":
+        df = pd.read_sql_query("SELECT * FROM schedules WHERE academic_year=? ORDER BY id DESC", conn, params=(academic_year,))
+    else:
+        df = pd.read_sql_query("SELECT * FROM schedules ORDER BY id DESC", conn)
+    conn.close()
+    return df
+
+
+def delete_schedule(schedule_id: int, username: str):
+    conn = sqlite3.connect(DB_NAME, timeout=30)
+    c = conn.cursor()
+    c.execute("DELETE FROM schedules WHERE id=?", (int(schedule_id),))
+    conn.commit()
+    conn.close()
+    log_action(username, "DELETE_SCHEDULE", f"Deleted schedule #{schedule_id}")
 
 
 def add_transaction(academic_year, stage, t_type, category, amount, description, t_date, username):

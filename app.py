@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-import streamlit.components.v1 as components
 from translations import LANG
 import database as db
 
@@ -73,7 +72,6 @@ if not st.session_state.logged_in:
     st.info("Default Logins -> Admin: `admin` / `admin123` | Staff: `user` / `user123`")
     st.stop()
 
-# الشريط العلوي بهوية الصورة المرفقة
 top_l, top_m, top_r = st.columns([2.2, 4.2, 2.6])
 with top_l:
     st.markdown(f"**{st.session_state.username}** • {T.get('role_admin' if st.session_state.role == 'admin' else 'role_user', st.session_state.role)}")
@@ -98,7 +96,6 @@ with top_r:
 
 st.markdown("---")
 
-# القائمة الجانبية الكاملة
 menu_map = [
     ("dashboard", "لوحة التحكم"),
     ("students", "الطلاب"),
@@ -347,4 +344,4 @@ elif sec == "reports":
 
 else:
     st.subheader(f"قسم: {sec}")
-    st.info("تم تهيئة هذا القسم ضمن النظام. يمكنك طلب تفعيل تفاصيله في أي وقت.")تم تهيئة القسم ضمن هيكلية النظام. أخبرني إن أردت تفعيل شاشات الإدخال التفصيلية لهذا القسم أو نقل الواجهة بالكامل إلى تطبيق ويب مخصص
+    st.info("تم تهيئة القسم ضمن النظام. يمكنك طلب تفعيل تفاصيله في أي وقت.")

@@ -269,23 +269,223 @@ if sec == "dashboard":
         st.markdown("</div>", unsafe_allow_html=True)
 
 elif sec == "students":
-    st.subheader(T["students"])
-    with st.form("add_st_form", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
-        full_name = c1.text_input("Student / الطالب / قوتابی")
-        parent_name = c2.text_input("Parent / ولي الأمر / بەخێوکەر")
-        phone = c3.text_input("Phone / الهاتف / مۆبایل")
-        s1, s2, s3, s4 = st.columns(4)
-        st_stage = s1.selectbox(T["stages"], ["kg", "primary", "high"])
-        st_grade = s2.text_input("Grade / الصف / پۆل", value="KG-1")
-        st_sec = s3.text_input("Section / الشعبة / هۆبە", value="A")
-        fee = s4.number_input(f"{T['kpi_income']} ({T['currency']})", min_value=0.0, step=100000.0, value=1500000.0)
-        if st.form_submit_button(T["add_student_btn"]) and full_name.strip():
-            db.add_student(selected_year, full_name.strip(), parent_name.strip(), phone.strip(), st_stage, st_grade.strip(), st_sec.strip(), fee, st.session_state.username)
-            st.success("OK")
-            st.rerun()
-    if not st_df.empty:
-        st.dataframe(st_df, use_container_width=True)
+    st.subheader(f"{T['students']} — {selected_year}")
+
+    tab_add, tab_manage, tab_profile = st.tabs([
+        T["add_student_btn"],
+        f"{T['students']} ({T['kpi_students']})",
+        "الملف الموحد والإيصالات / Unified Profile & Receipts",
+    ])
+
+    with tab_add:
+        with st.form("add_st_form", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            full_name = c1.text_input("الاسم الثلاثي / Full Name / ناوی سیانی")
+            parent_name = c2.text_input("ولي الأمر / Guardian / بەخێوکەر")
+            phone = c3.text_input("رقم الهاتف / Phone / مۆبایل")
+
+            s1, s2, s3, s4 = st.columns(4)
+            st_stage = s1.selectbox(
+                T["kpi_stages"],
+                ["kg", "primary", "high"],
+                format_func=lambda x: {"kg": T["stage_kg"], "primary": T["stage_pri"], "high": T["stage_high"]}[x],
+            )
+            st_grade = s2.text_input("الصف / Grade / پۆل", value="KG-1")
+            st_sec = s3.text_input("الشعبة / Section / هۆبە", value="A")
+            fee = s4.number_input(
+                f"الرسوم السنوية ({T['currency']})",
+                min_value=0.0,
+                step=100000.0,
+                value=1500000.0,
+            )
+
+            if st.form_submit_button(T["add_student_btn"]) and full_name.strip():
+                db.add_student(
+                    selected_year,
+                    full_name.strip(),
+                    parent_name.strip(),
+                    phone.strip(),
+                    st_stage,
+                    st_grade.strip(),
+                    st_sec.strip(),
+                    fee,
+                    st.session_state.username,
+                )
+                st.success("تم تسجيل الطالب بنجاح / Student registered successfully.")
+                st.rerun()
+
+    with tab_manage:
+        search_q = st.text_input("بحث بالاسم أو الهاتف أو الرقم / Search by name, phone or ID").strip().lower()
+        stage_filter = st.selectbox(
+            T["kpi_stages"],
+            ["all", "kg", "primary", "high"],
+            format_func=lambda x: "الكل / All / هەمووی" if x == "all" else {"kg": T["stage_kg"], "primary": T["stage_pri"], "high": T["stage_high"]}[x],
+            key="st_stage_filter",
+        )
+
+        view_students = st_df.copy()
+        if not view_students.empty:
+            if stage_filter != "all":
+                view_students = view_students[view_students["stage"] == stage_filter]
+            if search_q:
+                view_students = view_students[
+                    view_students["full_name"].astype(str).str.lower().str.contains(search_q, na=False)
+                    | view_students["phone"].astype(str).str.lower().str.contains(search_q, na=False)
+                    | view_students["id"].astype(str).str.contains(search_q, na=False)
+                ]
+            view_students["remaining_IQD"] = view_students["tuition_fee"] - view_students["paid_amount"]
+            st.dataframe(view_students, use_container_width=True, hide_index=True)
+
+            st.download_button(
+                label="📥 تصدير سجل الطلاب إلى Excel (.xlsx)",
+                data=to_excel_bytes({"Students": view_students}),
+                file_name=f"legends_students_{selected_year}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+
+            st.markdown("---")
+            st.markdown("### تعديل أو حذف بيانات طالب")
+            st_choices = {
+                f"#{int(r['id'])} — {r['full_name']} ({r['grade']} / {r['section']})": int(r["id"])
+                for _, r in view_students.iterrows()
+            }
+            if st_choices:
+                target_label = st.selectbox("اختر الطالب للتعديل أو الحذف", list(st_choices.keys()), key="edit_del_sel")
+                target_id = st_choices[target_label]
+                target_row = st_df[st_df["id"] == target_id].iloc[0]
+
+                with st.form("edit_student_form"):
+                    e1, e2, e3 = st.columns(3)
+                    e_name = e1.text_input("الاسم الثلاثي", value=str(target_row["full_name"]))
+                    e_parent = e2.text_input("ولي الأمر", value=str(target_row["parent_name"] or ""))
+                    e_phone = e3.text_input("رقم الهاتف", value=str(target_row["phone"] or ""))
+
+                    e4, e5, e6, e7 = st.columns(4)
+                    stage_keys = ["kg", "primary", "high"]
+                    cur_st_idx = stage_keys.index(target_row["stage"]) if target_row["stage"] in stage_keys else 0
+                    e_stage = e4.selectbox(
+                        T["kpi_stages"],
+                        stage_keys,
+                        index=cur_st_idx,
+                        format_func=lambda x: {"kg": T["stage_kg"], "primary": T["stage_pri"], "high": T["stage_high"]}[x],
+                    )
+                    e_grade = e5.text_input("الصف", value=str(target_row["grade"]))
+                    e_sec = e6.text_input("الشعبة", value=str(target_row["section"]))
+                    e_fee = e7.number_input(
+                        f"الرسوم السنوية ({T['currency']})",
+                        min_value=0.0,
+                        step=100000.0,
+                        value=float(target_row["tuition_fee"]),
+                    )
+
+                    if st.form_submit_button("💾 حفظ التعديلات") and e_name.strip():
+                        db.update_student(
+                            target_id, e_name, e_parent, e_phone,
+                            e_stage, e_grade, e_sec, e_fee, st.session_state.username,
+                        )
+                        st.success("تم تحديث بيانات الطالب بنجاح.")
+                        st.rerun()
+
+                if st.session_state.role == "admin":
+                    confirm_del = st.checkbox("أؤكد حذف هذا الطالب وجميع دفعاته وسجلاته نهائياً", key="confirm_del_st")
+                    if st.button("🗑️ حذف الطالب نهائياً", key="btn_del_st") and confirm_del:
+                        db.delete_student(target_id, st.session_state.username)
+                        st.success("تم حذف الطالب وسجلاته المرتبطة.")
+                        st.rerun()
+                else:
+                    st.caption("حذف الطالب متاح لمدير النظام (Admin) فقط.")
+        else:
+            st.info("لا توجد سجلات طلاب مطابقة.")
+
+    with tab_profile:
+        if st_df.empty:
+            st.info("سجل طالباً أولاً لعرض الملف الموحد وإصدار الإيصالات.")
+        else:
+            prof_opts = {
+                f"#{int(r['id'])} — {r['full_name']} ({r['grade']} / {r['section']})": int(r["id"])
+                for _, r in st_df.iterrows()
+            }
+            prof_label = st.selectbox("اختر الطالب لفتح الملف الموحد", list(prof_opts.keys()), key="prof_sel")
+            sid = prof_opts[prof_label]
+            s_info = st_df[st_df["id"] == sid].iloc[0]
+
+            total_f = float(s_info["tuition_fee"])
+            paid_f = float(s_info["paid_amount"])
+            rem_f = max(0.0, total_f - paid_f)
+
+            m1, m2, m3 = st.columns(3)
+            m1.metric("إجمالي الرسوم", f"{total_f:,.0f} {T['currency']}")
+            m2.metric("المدفوع", f"{paid_f:,.0f} {T['currency']}")
+            m3.metric(T["kpi_rem"], f"{rem_f:,.0f} {T['currency']}")
+
+            st.markdown(
+                f"""
+                <div class="panel-box">
+                    <strong>الطالب:</strong> {s_info['full_name']} |
+                    <strong>ولي الأمر:</strong> {s_info['parent_name']} |
+                    <strong>الهاتف:</strong> {s_info['phone']}<br>
+                    <strong>العام الدراسي:</strong> {s_info['academic_year']} |
+                    <strong>المرحلة والصف والشعبة:</strong> {s_info['stage']} — {s_info['grade']} — {s_info['section']}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            col_pay, col_acad = st.columns(2)
+            with col_pay:
+                st.markdown("#### تسجيل دفعة وإصدار إيصال")
+                with st.form("unified_pay_form", clear_on_submit=True):
+                    pay_val = st.number_input(f"مبلغ الدفعة ({T['currency']})", min_value=0.0, step=50000.0)
+                    pay_dt = st.date_input("تاريخ الدفعة", datetime.today())
+                    pay_nt = st.text_input("ملاحظات الدفعة", value="قسط دراسي / Installment")
+                    if st.form_submit_button("🧾 تسجيل الدفعة وإصدار إيصال") and pay_val > 0:
+                        rcpt_no = db.record_student_payment(sid, pay_val, pay_dt, pay_nt, st.session_state.username)
+                        st.session_state["last_receipt"] = {
+                            "receipt_no": rcpt_no,
+                            "student": s_info["full_name"],
+                            "grade": f"{s_info['grade']} / {s_info['section']}",
+                            "amount": pay_val,
+                            "date": str(pay_dt),
+                            "note": pay_nt,
+                            "remaining_after": max(0.0, total_f - (paid_f + pay_val)),
+                        }
+                        st.success(f"تم تسجيل الدفعة وإصدار الإيصال رقم #{rcpt_no}")
+                        st.rerun()
+
+                if "last_receipt" in st.session_state and st.session_state["last_receipt"]["student"] == s_info["full_name"]:
+                    lr = st.session_state["last_receipt"]
+                    st.markdown(
+                        f"""
+                        <div class="panel-box" style="border: 2px solid #059669;">
+                            <h4>إيصال قبض رسمي — {T['school_name']}</h4>
+                            <p><strong>رقم الإيصال:</strong> #{lr['receipt_no']} | <strong>التاريخ:</strong> {lr['date']}</p>
+                            <p><strong>اسم الطالب:</strong> {lr['student']} ({lr['grade']})</p>
+                            <p><strong>المبلغ المستلم:</strong> {lr['amount']:,.0f} {T['currency']}</p>
+                            <p><strong>المتبقي بعد الدفعة:</strong> {lr['remaining_after']:,.0f} {T['currency']}</p>
+                            <p><strong>ملاحظات:</strong> {lr['note']}</p>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                st_pays = db.get_student_payments(sid)
+                st.dataframe(st_pays, use_container_width=True, hide_index=True)
+
+            with col_acad:
+                st.markdown("#### السجل الأكاديمي (الحضور والدرجات)")
+                st_acad = db.get_student_academic(sid)
+                st.dataframe(st_acad, use_container_width=True, hide_index=True)
+
+            st.download_button(
+                label="📥 تصدير الملف الموحد للطالب إلى Excel (.xlsx)",
+                data=to_excel_bytes({
+                    "Student_Info": pd.DataFrame([s_info.to_dict()]),
+                    "Payments": db.get_student_payments(sid),
+                    "Academic": db.get_student_academic(sid),
+                }),
+                file_name=f"student_{sid}_profile.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
 
 elif sec == "finance":
     st.subheader(T["finance"])

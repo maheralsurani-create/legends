@@ -589,3 +589,13 @@ elif sec == "users":
 else:
     st.subheader(T.get(sec, sec))
     st.info(T["section_ready"])
+    def to_excel_bytes(sheets_dict: dict) -> bytes:
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        for sheet_name, df_item in sheets_dict.items():
+            safe_name = str(sheet_name)[:31]
+            if df_item is not None and not df_item.empty:
+                df_item.to_excel(writer, index=False, sheet_name=safe_name)
+            else:
+                pd.DataFrame({"Info": ["No data"]}).to_excel(writer, index=False, sheet_name=safe_name)
+    return buf.getvalue()

@@ -305,6 +305,23 @@ elif sec == "finance":
 
 elif sec == "reports":
     st.subheader(T["reports"])
+
+    # جدول ميزانية المراحل الثلاث للعام الدراسي المحدد
+    stage_rows = []
+    f_tx_year = tx_df[tx_df["academic_year"] == selected_year] if not tx_df.empty else tx_df
+    for s_key, s_label in [("kg", T["stage_kg"]), ("primary", T["stage_pri"]), ("high", T["stage_high"])]:
+        s_inc = float(f_tx_year[(f_tx_year["stage"] == s_key) & (f_tx_year["t_type"] == "income")]["amount"].sum()) if not f_tx_year.empty else 0.0
+        s_exp = float(f_tx_year[(f_tx_year["stage"] == s_key) & (f_tx_year["t_type"] == "expense")]["amount"].sum()) if not f_tx_year.empty else 0.0
+        stage_rows.append({
+            T["kpi_stages"]: s_label,
+            T["kpi_income"]: s_inc,
+            "Expenses": s_exp,
+            "Net Budget": s_inc - s_exp,
+        })
+    budget_df = pd.DataFrame(stage_rows)
+    st.dataframe(budget_df, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
     if not tx_df.empty:
         period = st.selectbox("Period", ["daily", "weekly", "monthly", "yearly"])
         ref_d = st.date_input("Date", datetime.today())
@@ -320,20 +337,54 @@ elif sec == "reports":
         else:
             dt_c = pd.to_datetime(tx_df["t_date"])
             rep = tx_df[dt_c.dt.year == ref_d.year]
+
         st.dataframe(rep, use_container_width=True)
         buf = io.BytesIO()
         with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-            rep.to_excel(writer, index=False, sheet_name="Report")
-        st.download_button("Excel", data=buf.getvalue(), file_name=f"legends_{period}_{ref_d}.xlsx")
+            rep.to_excel(writer, index=False, sheet_name="Transactions_Report")
+            budget_df.to_excel(writer, index=False, sheet_name="Stages_Budget")
+        st.download_button(
+            "Excel",
+            data=buf.getvalue(),
+            file_name=f"legends_{period}_{ref_d}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
+    st.markdown("---")
     with open(db.DB_NAME, "rb") as fp:
-        st.download_button("Backup (.db)", data=fp.read(), file_name=f"legends_backup_{datetime.today().strftime('%Y%m%d')}.db")
+        st.download_button(
+            "Backup (.db)",
+            data=fp.read(),
+            file_name=f"legends_backup_{datetime.today().strftime('%Y%m%d')}.db",
+            mime="application/octet-stream",
+        )
     if st.session_state.role == "admin":
         up = st.file_uploader("Restore (.db)", type=["db"])
         if up is not None:
             with open(db.DB_NAME, "wb") as out_f:
                 out_f.write(up.getbuffer())
+            db.log_action(st.session_state.username, "RESTORE_DB", f"Restored from {up.name}")
             st.success("Restored.")
+            st.rerun()
+
+    st.markdown("---")
+    st.dataframe(db.get_audit_log(), use_container_width=True, hide_index=True)
+
+elif sec == "users":
+    st.subheader(T["users"])
+    if st.session_state.role != "admin":
+        st.warning("Admin only")
+    else:
+        with st.form("add_user_form", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            new_u = c1.text_input(T["username"])
+            new_p = c2.text_input(T["password"], type="password")
+            new_r = c3.selectbox("Role", ["user", "admin"])
+            if st.form_submit_button("Save User") and new_u.strip() and new_p.strip():
+                db.create_user(new_u, new_p, new_r, st.session_state.username)
+                st.success("OK")
+                st.rerun()
+        st.dataframe(db.get_users(), use_container_width=True, hide_index=True)
 
 else:
     st.subheader(T.get(sec, sec))

@@ -1,57 +1,182 @@
 import sqlite3
 import pandas as pd
 import hashlib
+from datetime import datetime
 
 DB_NAME = "school_finance.db"
 
-def hash_pass(password):
+def hash_pass(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    
-    # جدول المستخدمين
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
+
+    c.execute("""CREATE TABLE IF NOT EXISTS users (
                     username TEXT PRIMARY KEY,
                     password TEXT,
                     role TEXT
-                )''')
-    
-    # إضافة حساب أدمن وحساب مستخدم افتراضي إذا لم يكونا موجودين
+                )""")
+
     c.execute("SELECT COUNT(*) FROM users")
     if c.fetchone()[0] == 0:
         c.execute("INSERT INTO users VALUES (?, ?, ?)", ("admin", hash_pass("admin123"), "admin"))
         c.execute("INSERT INTO users VALUES (?, ?, ?)", ("user", hash_pass("user123"), "user"))
-    
-    # جدول الحركات المالية
-    c.execute('''CREATE TABLE IF NOT EXISTS transactions (
+
+    c.execute("""CREATE TABLE IF NOT EXISTS students (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    academic_year TEXT,
+                    full_name TEXT,
+                    parent_name TEXT,
+                    phone TEXT,
+                    stage TEXT,
+                    grade TEXT,
+                    section TEXT,
+                    tuition_fee REAL,
+                    paid_amount REAL DEFAULT 0.0
+                )""")
+
+    c.execute("""CREATE TABLE IF NOT EXISTS student_payments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    student_id INTEGER,
+                    amount REAL,
+                    pay_date DATE,
+                    note TEXT,
+                    created_by TEXT
+                )""")
+
+    c.execute("""CREATE TABLE IF NOT EXISTS academic_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    student_id INTEGER,
+                    academic_year TEXT,
+                    rec_date DATE,
+                    attendance TEXT,
+                    subject TEXT,
+                    score TEXT,
+                    created_by TEXT
+                )""")
+
+    c.execute("""CREATE TABLE IF NOT EXISTS transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    academic_year TEXT,
                     stage TEXT,
                     t_type TEXT,
+                    category TEXT,
                     amount REAL,
                     description TEXT,
                     t_date DATE,
+                    student_id INTEGER,
                     created_by TEXT
-                )''')
+                )""")
+
+    c.execute("""CREATE TABLE IF NOT EXISTS audit_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT,
+                    username TEXT,
+                    action TEXT,
+                    details TEXT
+                )""")
+
     conn.commit()
     conn.close()
 
-def verify_user(username, password):
+def log_action(username: str, action: str, details: str):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    c.execute("INSERT INTO audit_log (timestamp, username, action, details) VALUES (?, ?, ?, ?)",
+              (ts, username, action, details))
+    conn.commit()
+    conn.close()
+
+def verify_user(username: str, password: str):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("SELECT role FROM users WHERE username=? AND password=?", (username, hash_pass(password)))
-    res = c.fetchone()
+    row = c.fetchone()
     conn.close()
-    return res[0] if res else None
+    return row[0] if row else None
 
-def add_transaction(stage, t_type, amount, description, t_date, created_by):
+def add_student(academic_year, full_name, parent_name, phone, stage, grade, section, tuition_fee, username):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("INSERT INTO transactions (stage, t_type, amount, description, t_date, created_by) VALUES (?, ?, ?, ?, ?, ?)",
-              (stage, t_type, amount, description, str(t_date), created_by))
+    c.execute("""INSERT INTO students
+                 (academic_year, full_name, parent_name, phone, stage, grade, section, tuition_fee, paid_amount)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.0)""",
+              (academic_year, full_name, parent_name, phone, stage, grade, section, float(tuition_fee)))
+    sid = c.lastrowid
     conn.commit()
     conn.close()
+    log_action(username, "ADD_STUDENT", f"Student #{sid} ({full_name}) - {stage}/{grade}/{section} - Fee: {tuition_fee:,.0f} IQD")
+
+def get_students(academic_year=None):
+    conn = sqlite3.connect(DB_NAME)
+    if academic_year and academic_year != "ALL":
+        df = pd.read_sql_query("SELECT * FROM students WHERE academic_year=? ORDER BY id DESC", conn, params=(academic_year,))
+    else:
+        df = pd.read_sql_query("SELECT * FROM students ORDER BY id DESC", conn)
+    conn.close()
+    return df
+
+def record_student_payment(student_id: int, amount: float, pay_date, note: str, username: str):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT full_name, stage, academic_year, paid_amount FROM students WHERE id=?", (student_id,))
+    st = c.fetchone()
+    if not st:
+        conn.close()
+        return None
+    full_name, stage, yr, cur_paid = st
+    amt = float(amount)
+    new_paid = float(cur_paid) + amt
+
+    c.execute("UPDATE students SET paid_amount=? WHERE id=?", (new_paid, student_id))
+    c.execute("INSERT INTO student_payments (student_id, amount, pay_date, note, created_by) VALUES (?, ?, ?, ?, ?)",
+              (student_id, amt, str(pay_date), note, username))
+    receipt_id = c.lastrowid
+    c.execute("""INSERT INTO transactions
+                 (academic_year, stage, t_type, category, amount, description, t_date, student_id, created_by)
+                 VALUES (?, ?, 'income', 'Tuition / رسوم دراسية', ?, ?, ?, ?, ?)""",
+              (yr, stage, amt, f"Receipt #{receipt_id} - {full_name} ({note})", str(pay_date), student_id, username))
+    conn.commit()
+    conn.close()
+    log_action(username, "PAYMENT_RECEIPT", f"Receipt #{receipt_id} for {full_name} (#{student_id}): {amt:,.0f} IQD")
+    return receipt_id
+
+def get_student_payments(student_id: int):
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql_query("SELECT * FROM student_payments WHERE student_id=? ORDER BY id DESC", conn, params=(student_id,))
+    conn.close()
+    return df
+
+def add_academic_record(student_id: int, academic_year: str, rec_date, attendance: str, subject: str, score: str, username: str):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("""INSERT INTO academic_records
+                 (student_id, academic_year, rec_date, attendance, subject, score, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)""",
+              (student_id, academic_year, str(rec_date), attendance, subject, score, username))
+    conn.commit()
+    conn.close()
+    log_action(username, "ACADEMIC_RECORD", f"Student #{student_id} ({academic_year}): {attendance}, {subject}={score}")
+
+def get_student_academic(student_id: int):
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql_query("SELECT * FROM academic_records WHERE student_id=? ORDER BY rec_date DESC, id DESC", conn, params=(student_id,))
+    conn.close()
+    return df
+
+def add_transaction(academic_year, stage, t_type, category, amount, description, t_date, username):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("""INSERT INTO transactions
+                 (academic_year, stage, t_type, category, amount, description, t_date, student_id, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)""",
+              (academic_year, stage, t_type, category, float(amount), description, str(t_date), username))
+    tx_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    log_action(username, "TREASURY_TX", f"TX #{tx_id} [{t_type}] {category}: {float(amount):,.0f} IQD - {description}")
 
 def get_transactions():
     conn = sqlite3.connect(DB_NAME)
@@ -59,9 +184,16 @@ def get_transactions():
     conn.close()
     return df
 
-def delete_transaction(record_id):
+def delete_transaction(record_id: int, username: str):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("DELETE FROM transactions WHERE id=?", (record_id,))
+    c.execute("DELETE FROM transactions WHERE id=?", (int(record_id),))
     conn.commit()
     conn.close()
+    log_action(username, "DELETE_TX", f"Deleted transaction #{record_id}")
+
+def get_audit_log():
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql_query("SELECT * FROM audit_log ORDER BY id DESC LIMIT 200", conn)
+    conn.close()
+    return df

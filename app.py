@@ -28,6 +28,12 @@ def render_school_logo(width: int = 120) -> bool:
     return False
 
 
+def is_valid_sqlite_db(raw_bytes: bytes) -> bool:
+    if not raw_bytes or len(raw_bytes) < 100:
+        return False
+    return raw_bytes[:16] == b"SQLite format 3\x00"
+
+
 def to_excel_bytes(sheets_dict: dict) -> bytes:
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
@@ -826,21 +832,43 @@ elif sec == "reports":
         )
 
     st.markdown("---")
-    with open(db.DB_NAME, "rb") as fp:
-        st.download_button(
-            "Backup (.db)",
-            data=fp.read(),
-            file_name=f"legends_backup_{datetime.today().strftime('%Y%m%d')}.db",
-            mime="application/octet-stream",
-        )
-    if st.session_state.role == "admin":
-        up = st.file_uploader("Restore (.db)", type=["db"])
-        if up is not None:
-            with open(db.DB_NAME, "wb") as out_f:
-                out_f.write(up.getbuffer())
-            db.log_action(st.session_state.username, "RESTORE_DB", f"Restored from {up.name}")
-            st.success("Restored.")
-            st.rerun()
+    st.markdown(f"### {T.get('backup_restore_title', 'Backup & Restore (.db)')}")
+    db.init_db()
+    b_col1, b_col2 = st.columns(2)
+
+    with b_col1:
+        if os.path.exists(db.DB_NAME):
+            with open(db.DB_NAME, "rb") as fp:
+                db_bytes = fp.read()
+            st.download_button(
+                label=T.get("backup_btn", "📥 Backup (.db)"),
+                data=db_bytes,
+                file_name=f"legends_backup_{datetime.today().strftime('%Y%m%d_%H%M')}.db",
+                mime="application/octet-stream",
+                use_container_width=True,
+            )
+
+    with b_col2:
+        if st.session_state.role == "admin":
+            up_db = st.file_uploader(T.get("restore_label", "Restore (.db)"), type=["db"], key="restore_db_uploader")
+            if up_db is not None:
+                uploaded_bytes = up_db.getbuffer().tobytes()
+                if not is_valid_sqlite_db(uploaded_bytes):
+                    st.error(T.get("invalid_db_file", "الملف المرفوع ليس قاعدة بيانات SQLite صالحة."))
+                else:
+                    if st.button(T.get("confirm_restore_btn", "♻️ تأكيد استعادة قاعدة البيانات"), key="btn_confirm_restore"):
+                        safety_copy = f"{db.DB_NAME}.bak"
+                        if os.path.exists(db.DB_NAME):
+                            with open(db.DB_NAME, "rb") as cur_fp, open(safety_copy, "wb") as bak_fp:
+                                bak_fp.write(cur_fp.read())
+                        with open(db.DB_NAME, "wb") as out_f:
+                            out_f.write(uploaded_bytes)
+                        db.init_db()
+                        db.log_action(st.session_state.username, "RESTORE_DB", f"Restored database from {up_db.name}")
+                        st.success(T.get("restore_success", "تمت استعادة قاعدة البيانات وترقيتها بنجاح."))
+                        st.rerun()
+        else:
+            st.info(T.get("admin_only_restore", "استعادة قاعدة البيانات متاحة لمدير النظام (Admin) فقط."))
 
     st.markdown("---")
     st.dataframe(db.get_audit_log(), use_container_width=True, hide_index=True)

@@ -948,7 +948,6 @@ elif sec == "reports":
             file_name=f"legends_full_report_{period}_{ref_d}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-
 st.markdown("---")
     st.markdown("### ⚠️ إعادة ضبط البرنامج وحذف كافة البيانات (Factory Reset)")
     if st.session_state.role == "admin":

@@ -174,8 +174,6 @@ def get_students(academic_year=None):
     if not df.empty and "paid_amount" not in df.columns:
         df["paid_amount"] = 0.0
     return df
-
-
 def record_student_payment(student_id: int, amount: float, pay_date, note: str, username: str):
     conn = sqlite3.connect(DB_NAME, timeout=30)
     c = conn.cursor()

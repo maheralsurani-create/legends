@@ -1,3 +1,4 @@
+import base64
 import io
 import os
 from datetime import datetime, timedelta
@@ -20,11 +21,26 @@ LOGO_CANDIDATES = [
 ]
 
 
-def render_school_logo(width: int = 120) -> bool:
+def get_logo_path():
     for p in LOGO_CANDIDATES:
         if os.path.exists(p):
-            st.image(p, width=width)
-            return True
+            return p
+    return None
+
+
+def get_logo_base64() -> str:
+    p = get_logo_path()
+    if not p:
+        return ""
+    with open(p, "rb") as f:
+        return base64.b64encode(f.read()).decode("utf-8")
+
+
+def render_school_logo(width: int = 120) -> bool:
+    p = get_logo_path()
+    if p:
+        st.image(p, width=width)
+        return True
     return False
 
 
@@ -63,27 +79,101 @@ page_align = T["align"]
 st.markdown(
     f"""
     <style>
-        .main, .stSidebar, .stMarkdown, .stButton, .stSelectbox, .stTextInput, .stNumberInput, .stDateInput {{
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+
+        html, body, .main, .stSidebar, .stMarkdown, .stButton, .stSelectbox, .stTextInput, .stNumberInput, .stDateInput {{
+            font-family: 'Cairo', sans-serif !important;
             direction: {page_dir};
             text-align: {page_align};
         }}
-        .kpi-card {{
-            border-radius: 10px;
-            padding: 14px 16px;
-            color: #ffffff;
-            min-height: 108px;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.08);
-            margin-bottom: 10px;
+
+        .stApp {{
+            background: linear-gradient(135deg, #f4f7fb 0%, #eef2f7 100%);
         }}
-        .kpi-title {{ font-size: 13px; opacity: 0.95; font-weight: 600; }}
-        .kpi-val {{ font-size: 26px; font-weight: 800; margin: 4px 0; }}
-        .kpi-sub {{ font-size: 12px; opacity: 0.9; }}
+
+        .login-card {{
+            max-width: 460px;
+            margin: 28px auto 14px auto;
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 28px 28px 22px 28px;
+            box-shadow: 0 14px 35px rgba(15, 23, 42, 0.08);
+            border: 1px solid #e2e8f0;
+        }}
+
+        .login-logo-wrap {{
+            display: flex;
+            justify-content: center;
+            margin-bottom: 12px;
+        }}
+
+        .login-logo-wrap img {{
+            width: 110px;
+            height: 110px;
+            object-fit: contain;
+            border-radius: 16px;
+            padding: 6px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+        }}
+
+        .login-title {{
+            text-align: center !important;
+            font-size: 22px;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 4px;
+        }}
+
+        .login-sub {{
+            text-align: center !important;
+            font-size: 13px;
+            color: #64748b;
+            margin-bottom: 18px;
+        }}
+
+        .top-header-card {{
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 12px 18px;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+            margin-bottom: 14px;
+        }}
+
+        .kpi-card {{
+            border-radius: 14px;
+            padding: 16px 18px;
+            color: #ffffff;
+            min-height: 112px;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+            margin-bottom: 12px;
+            transition: transform 0.15s ease;
+        }}
+        .kpi-card:hover {{
+            transform: translateY(-2px);
+        }}
+        .kpi-title {{ font-size: 13px; opacity: 0.95; font-weight: 700; }}
+        .kpi-val {{ font-size: 26px; font-weight: 800; margin: 5px 0; }}
+        .kpi-sub {{ font-size: 12px; opacity: 0.92; }}
+
         .panel-box {{
             background: #ffffff;
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
-            padding: 14px 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 16px 18px;
             margin-bottom: 14px;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
+        }}
+
+        .stButton > button, .stFormSubmitButton > button {{
+            border-radius: 10px !important;
+            font-weight: 700 !important;
+            border: 1px solid #cbd5e1 !important;
+            transition: all 0.15s ease !important;
+        }}
+        .stButton > button:hover, .stFormSubmitButton > button:hover {{
+            border-color: #2563eb !important;
         }}
     </style>
     """,
@@ -91,31 +181,60 @@ st.markdown(
 )
 
 if not st.session_state.logged_in:
-    render_school_logo(width=140)
-    st.title(f"🏫 {T['school_name']}")
-    st.caption(T["school_sub"])
-    st.subheader(T["login"])
-    with st.form("login_form"):
-        u = st.text_input(T["username"])
-        p = st.text_input(T["password"], type="password")
-        if st.form_submit_button(T["login_btn"]):
-            role = db.verify_user(u.strip(), p)
-            if role:
-                st.session_state.logged_in = True
-                st.session_state.username = u.strip()
-                st.session_state.role = role
-                db.log_action(u.strip(), "LOGIN", "Logged into Legends SMS")
-                st.rerun()
-            else:
-                st.error(T["wrong_creds"])
-    st.info("Default Logins -> Admin: `admin` / `admin123` | Staff: `user` / `user123`")
+    _, mid_col, _ = st.columns([1, 1.4, 1])
+    with mid_col:
+        l1, l2, l3 = st.columns(3)
+        if l1.button("عربي", key="login_lang_ar", use_container_width=True):
+            st.session_state.lang = "ar"
+            st.rerun()
+        if l2.button("كردي", key="login_lang_ku", use_container_width=True):
+            st.session_state.lang = "ku"
+            st.rerun()
+        if l3.button("English", key="login_lang_en", use_container_width=True):
+            st.session_state.lang = "en"
+            st.rerun()
+
+        logo_b64 = get_logo_base64()
+        logo_html = (
+            f'<div class="login-logo-wrap"><img src="data:image/png;base64,{logo_b64}" alt="Logo"></div>'
+            if logo_b64
+            else '<div class="login-logo-wrap"><div style="font-size:44px;">🏫</div></div>'
+        )
+
+        st.markdown(
+            f"""
+            <div class="login-card">
+                {logo_html}
+                <div class="login-title">{T['school_name']}</div>
+                <div class="login-sub">{T['school_sub']}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        with st.container(border=True):
+            st.markdown(f"#### {T['login']}")
+            with st.form("login_form"):
+                u = st.text_input(T["username"], placeholder=T["username"])
+                p = st.text_input(T["password"], type="password", placeholder=T["password"])
+                if st.form_submit_button(T["login_btn"], use_container_width=True):
+                    role = db.verify_user(u.strip(), p)
+                    if role:
+                        st.session_state.logged_in = True
+                        st.session_state.username = u.strip()
+                        st.session_state.role = role
+                        db.log_action(u.strip(), "LOGIN", "Logged into Legends SMS")
+                        st.rerun()
+                    else:
+                        st.error(T["wrong_creds"])
     st.stop()
 
-# الشريط العلوي
-top_l, top_m, top_r = st.columns([2.2, 4.2, 2.8])
+# الشريط العلوي العصري
+st.markdown('<div class="top-header-card">', unsafe_allow_html=True)
+top_l, top_m, top_r = st.columns([2.3, 3.8, 3.1])
 with top_l:
     role_label = T["role_admin"] if st.session_state.role == "admin" else T["role_user"]
-    st.markdown(f"**{st.session_state.username}** • {role_label}")
+    st.markdown(f"**👤 {st.session_state.username}**  \n<span style='color:#64748b;font-size:13px;'>{role_label}</span>", unsafe_allow_html=True)
     if st.button(T["logout"], key="top_logout"):
         st.session_state.logged_in = False
         st.rerun()
@@ -133,13 +252,12 @@ with top_m:
         st.rerun()
 
 with top_r:
-    top_logo_col, top_title_col = st.columns([1, 3])
+    top_logo_col, top_title_col = st.columns([1, 3.2])
     with top_logo_col:
-        render_school_logo(width=68)
+        render_school_logo(width=64)
     with top_title_col:
-        st.markdown(f"### {T['school_name']}\n**{T['school_sub']}**")
-
-st.markdown("---")
+        st.markdown(f"### {T['school_name']}\n<span style='color:#64748b;font-size:13px;'>{T['school_sub']}</span>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
 
 # القائمة الجانبية
 section_keys = [
@@ -159,7 +277,7 @@ section_keys = [
 ]
 
 with st.sidebar:
-    render_school_logo(width=115)
+    render_school_logo(width=110)
 st.sidebar.markdown(f"### LEGENDS\n**{T['nav_title']}**")
 for key in section_keys:
     is_active = st.session_state.active_section == key
@@ -210,12 +328,12 @@ if sec == "dashboard":
     late_cnt = len(acad_df[acad_df["attendance"].astype(str).str.contains("متأخر|دواکەوتوو|Late", case=False, na=False)]) if not acad_df.empty else 0
 
     cards = [
-        ("#1d4ed8", T["kpi_students"], f"{total_students:,}", T["kpi_students_sub"]),
-        ("#059669", T["kpi_teachers"], f"{len(teachers_df):,}", T["kpi_teachers_sub"]),
-        ("#7c3aed", T["kpi_stages"], "3", T["kpi_stages_sub"]),
-        ("#d97706", T["kpi_absent"], f"{absent_today:,}", T["kpi_absent_sub"]),
-        ("#16a34a", T["kpi_income"], f"{income_val:,.0f}", T["currency"]),
-        ("#e11d48", T["kpi_rem"], f"{remaining_val:,.0f}", T["currency"]),
+        ("linear-gradient(135deg, #1d4ed8, #2563eb)", T["kpi_students"], f"{total_students:,}", T["kpi_students_sub"]),
+        ("linear-gradient(135deg, #047857, #10b981)", T["kpi_teachers"], f"{len(teachers_df):,}", T["kpi_teachers_sub"]),
+        ("linear-gradient(135deg, #6d28d9, #8b5cf6)", T["kpi_stages"], "3", T["kpi_stages_sub"]),
+        ("linear-gradient(135deg, #b45309, #f59e0b)", T["kpi_absent"], f"{absent_today:,}", T["kpi_absent_sub"]),
+        ("linear-gradient(135deg, #15803d, #22c55e)", T["kpi_income"], f"{income_val:,.0f}", T["currency"]),
+        ("linear-gradient(135deg, #be123c, #f43f5e)", T["kpi_rem"], f"{remaining_val:,.0f}", T["currency"]),
     ]
     cols = st.columns(6)
     for col, (bg, title, val, sub) in zip(cols, cards):

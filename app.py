@@ -902,7 +902,7 @@ elif sec == "finance":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-elif sec == "reports":
+    elif sec == "reports":
     st.subheader(T["reports"])
 
     stage_rows = []

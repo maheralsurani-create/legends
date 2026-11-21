@@ -20,6 +20,8 @@ def to_excel_bytes(sheets_dict: dict) -> bytes:
             else:
                 pd.DataFrame({"Info": ["No data"]}).to_excel(writer, index=False, sheet_name=safe_name)
     return buf.getvalue()
+
+
 if "lang" not in st.session_state:
     st.session_state.lang = "ar"
 if "logged_in" not in st.session_state:
@@ -110,7 +112,7 @@ with top_r:
 
 st.markdown("---")
 
-# القائمة الجانبية المترجمة بالكامل
+# القائمة الجانبية
 section_keys = [
     "dashboard",
     "students",
@@ -511,13 +513,33 @@ elif sec == "finance":
                 rcpt = db.record_student_payment(opts[sel], amt, p_date, note, st.session_state.username)
                 st.success(f"Receipt #{rcpt}")
                 st.rerun()
+
+    st.markdown("---")
+    with st.form("tx_form", clear_on_submit=True):
+        c1, c2, c3, c4 = st.columns(4)
+        t_stage = c1.selectbox(T["kpi_stages"], ["kg", "primary", "high"], format_func=lambda x: {"kg": T["stage_kg"], "primary": T["stage_pri"], "high": T["stage_high"]}[x])
+        t_type = c2.selectbox("Type / النوع", ["income", "expense"])
+        t_cat = c3.text_input("Category / البند", value="رسوم / مصروفات")
+        t_amt = c4.number_input(f"Amount ({T['currency']})", min_value=0.0, step=50000.0)
+        t_desc = st.text_input("Description / البيان")
+        t_date = st.date_input("Date / التاريخ", datetime.today())
+        if st.form_submit_button("Save TX") and t_amt > 0:
+            db.add_transaction(selected_year, t_stage, t_type, t_cat, t_amt, t_desc, t_date, st.session_state.username)
+            st.success("OK")
+            st.rerun()
+
     if not tx_df.empty:
-        st.dataframe(tx_df, use_container_width=True)
+        st.dataframe(tx_df, use_container_width=True, hide_index=True)
+        st.download_button(
+            label="📥 تصدير حركات الخزينة إلى Excel (.xlsx)",
+            data=to_excel_bytes({"Treasury_Transactions": tx_df}),
+            file_name=f"legends_transactions_{selected_year}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
 elif sec == "reports":
     st.subheader(T["reports"])
 
-    # جدول ميزانية المراحل الثلاث للعام الدراسي المحدد
     stage_rows = []
     f_tx_year = tx_df[tx_df["academic_year"] == selected_year] if not tx_df.empty else tx_df
     for s_key, s_label in [("kg", T["stage_kg"]), ("primary", T["stage_pri"]), ("high", T["stage_high"])]:
@@ -549,15 +571,16 @@ elif sec == "reports":
             dt_c = pd.to_datetime(tx_df["t_date"])
             rep = tx_df[dt_c.dt.year == ref_d.year]
 
-        st.dataframe(rep, use_container_width=True)
-        buf = io.BytesIO()
-        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-            rep.to_excel(writer, index=False, sheet_name="Transactions_Report")
-            budget_df.to_excel(writer, index=False, sheet_name="Stages_Budget")
+        st.dataframe(rep, use_container_width=True, hide_index=True)
         st.download_button(
-            "Excel",
-            data=buf.getvalue(),
-            file_name=f"legends_{period}_{ref_d}.xlsx",
+            "📥 تصدير كافة التقارير إلى Excel (.xlsx)",
+            data=to_excel_bytes({
+                "Transactions_Report": rep,
+                "Stages_Budget": budget_df,
+                "All_Payments": db.get_all_payments(),
+                "Audit_Log": db.get_audit_log(),
+            }),
+            file_name=f"legends_full_report_{period}_{ref_d}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 

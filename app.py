@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from translations import LANG
+from translations import UI_TEXT
 import database as db
 
 db.init_db()
@@ -18,15 +18,15 @@ if "logged_in" not in st.session_state:
 if "active_section" not in st.session_state:
     st.session_state.active_section = "dashboard"
 
-T = LANG.get(st.session_state.lang, LANG["ar"])
-is_rtl = st.session_state.lang in ("ar", "ku")
-page_dir = "rtl" if is_rtl else "ltr"
-page_align = "right" if is_rtl else "left"
+lang = st.session_state.lang
+T = UI_TEXT.get(lang, UI_TEXT["ar"])
+page_dir = T["dir"]
+page_align = T["align"]
 
 st.markdown(
     f"""
     <style>
-        .main, .stSidebar {{
+        .main, .stSidebar, .stMarkdown, .stButton, .stSelectbox, .stTextInput, .stNumberInput, .stDateInput {{
             direction: {page_dir};
             text-align: {page_align};
         }}
@@ -54,12 +54,13 @@ st.markdown(
 )
 
 if not st.session_state.logged_in:
-    st.title("Legends School & Kindergarten — SMS")
-    st.subheader("Private School & Kindergarten • Erbil - Iraq")
+    st.title(f"🏫 {T['school_name']}")
+    st.caption(T["school_sub"])
+    st.subheader(T["login"])
     with st.form("login_form"):
-        u = st.text_input(T.get("username", "Username"))
-        p = st.text_input(T.get("password", "Password"), type="password")
-        if st.form_submit_button(T.get("login_btn", "Login")):
+        u = st.text_input(T["username"])
+        p = st.text_input(T["password"], type="password")
+        if st.form_submit_button(T["login_btn"]):
             role = db.verify_user(u.strip(), p)
             if role:
                 st.session_state.logged_in = True
@@ -68,57 +69,63 @@ if not st.session_state.logged_in:
                 db.log_action(u.strip(), "LOGIN", "Logged into Legends SMS")
                 st.rerun()
             else:
-                st.error(T.get("wrong_creds", "Invalid username or password"))
+                st.error(T["wrong_creds"])
     st.info("Default Logins -> Admin: `admin` / `admin123` | Staff: `user` / `user123`")
     st.stop()
 
-top_l, top_m, top_r = st.columns([2.2, 4.2, 2.6])
+# الشريط العلوي
+top_l, top_m, top_r = st.columns([2.2, 4.2, 2.8])
 with top_l:
-    st.markdown(f"**{st.session_state.username}** • {T.get('role_admin' if st.session_state.role == 'admin' else 'role_user', st.session_state.role)}")
-    if st.button(T.get("logout", "تسجيل الخروج"), key="top_logout"):
+    role_label = T["role_admin"] if st.session_state.role == "admin" else T["role_user"]
+    st.markdown(f"**{st.session_state.username}** • {role_label}")
+    if st.button(T["logout"], key="top_logout"):
         st.session_state.logged_in = False
         st.rerun()
 
 with top_m:
     b1, b2, b3 = st.columns(3)
-    if b1.button("English", use_container_width=True):
+    if b1.button("English", key="btn_en", use_container_width=True):
         st.session_state.lang = "en"
         st.rerun()
-    if b2.button("عربي", use_container_width=True):
+    if b2.button("عربي", key="btn_ar", use_container_width=True):
         st.session_state.lang = "ar"
         st.rerun()
-    if b3.button("كردي", use_container_width=True):
+    if b3.button("كردي", key="btn_ku", use_container_width=True):
         st.session_state.lang = "ku"
         st.rerun()
 
 with top_r:
-    st.markdown("### Legends School & Kindergarten\n**Private School & Kindergarten • Erbil - Iraq**")
+    st.markdown(f"### {T['school_name']}\n**{T['school_sub']}**")
 
 st.markdown("---")
 
-menu_map = [
-    ("dashboard", "لوحة التحكم"),
-    ("students", "الطلاب"),
-    ("teachers", "المدرسون"),
-    ("parents", "أولياء الأمور"),
-    ("stages", "المراحل والصفوف"),
-    ("subjects", "المواد الدراسية"),
-    ("schedule", "الجدول الدراسي"),
-    ("attendance", "الحضور والغياب"),
-    ("exams", "الامتحانات والدرجات"),
-    ("finance", "الرسوم والدفعات"),
-    ("reports", "التقارير"),
-    ("certificates", "الشهادات"),
-    ("users", "المستخدمون والصلاحيات"),
+# القائمة الجانبية المترجمة بالكامل
+section_keys = [
+    "dashboard",
+    "students",
+    "teachers",
+    "parents",
+    "stages",
+    "subjects",
+    "schedule",
+    "attendance",
+    "exams",
+    "finance",
+    "reports",
+    "certificates",
+    "users",
 ]
 
-st.sidebar.markdown("### LEGENDS\n**PRIVATE SCHOOL & KINDERGARTEN**")
-for key, label in menu_map:
-    if st.sidebar.button(label, key=f"nav_{key}", use_container_width=True):
+st.sidebar.markdown(f"### LEGENDS\n**{T['nav_title']}**")
+for key in section_keys:
+    is_active = st.session_state.active_section == key
+    btn_label = f"▶ {T[key]}" if is_active else T[key]
+    if st.sidebar.button(btn_label, key=f"nav_{key}", use_container_width=True):
         st.session_state.active_section = key
+        st.rerun()
 
 st.sidebar.markdown("---")
-selected_year = st.sidebar.selectbox(T.get("year", "العام الدراسي"), ["2026-2027", "2025-2026", "2027-2028"], index=0)
+selected_year = st.sidebar.selectbox(T["year"], ["2026-2027", "2025-2026", "2027-2028"], index=0)
 
 st_df = db.get_students(selected_year)
 tx_df = db.get_transactions()
@@ -128,7 +135,7 @@ if not tx_df.empty:
 sec = st.session_state.active_section
 
 if sec == "dashboard":
-    st.subheader("لوحة التحكم")
+    st.subheader(T["dashboard"])
 
     total_students = len(st_df) if not st_df.empty else 0
     kg_cnt = len(st_df[st_df["stage"] == "kg"]) if not st_df.empty else 0
@@ -152,15 +159,15 @@ if sec == "dashboard":
     today_str = str(datetime.today().date())
     absent_today = len(acad_df[(acad_df["rec_date"].astype(str) == today_str) & (acad_df["attendance"].astype(str).str.contains("غائب|نەبوو|Absent", case=False, na=False))]) if not acad_df.empty else 0
     present_cnt = len(acad_df[acad_df["attendance"].astype(str).str.contains("حاضر|ئامادە|Present", case=False, na=False)]) if not acad_df.empty else 0
-    late_cnt = len(acad_df[acad_df["attendance"].astype(str).str.contains("متأخر|Late", case=False, na=False)]) if not acad_df.empty else 0
+    late_cnt = len(acad_df[acad_df["attendance"].astype(str).str.contains("متأخر|دواکەوتوو|Late", case=False, na=False)]) if not acad_df.empty else 0
 
     cards = [
-        ("#1d4ed8", "إجمالي الطلاب", f"{total_students:,}", "طالب وطالبة"),
-        ("#059669", "المدرسون", "1", "مدرس ومدرسة"),
-        ("#7c3aed", "المراحل والصفوف", "2", "مرحلة وصف"),
-        ("#d97706", "الغياب اليوم", f"{absent_today:,}", "طالب غائب"),
-        ("#16a34a", "الإيرادات", f"{income_val:,.0f}", "د.ع"),
-        ("#e11d48", "المتبقي", f"{remaining_val:,.0f}", "د.ع"),
+        ("#1d4ed8", T["kpi_students"], f"{total_students:,}", T["kpi_students_sub"]),
+        ("#059669", T["kpi_teachers"], "1", T["kpi_teachers_sub"]),
+        ("#7c3aed", T["kpi_stages"], "2", T["kpi_stages_sub"]),
+        ("#d97706", T["kpi_absent"], f"{absent_today:,}", T["kpi_absent_sub"]),
+        ("#16a34a", T["kpi_income"], f"{income_val:,.0f}", T["currency"]),
+        ("#e11d48", T["kpi_rem"], f"{remaining_val:,.0f}", T["currency"]),
     ]
     cols = st.columns(6)
     for col, (bg, title, val, sub) in zip(cols, cards):
@@ -179,11 +186,11 @@ if sec == "dashboard":
 
     with c_left:
         st.markdown('<div class="panel-box">', unsafe_allow_html=True)
-        st.markdown("**عدد الطلاب حسب المرحلة**")
+        st.markdown(f"**{T['chart_stages']}**")
         fig_bar = go.Figure(
             data=[
                 go.Bar(
-                    x=["الروضة", "الأساسي", "الإعدادية"],
+                    x=[T["stage_kg"], T["stage_pri"], T["stage_high"]],
                     y=[kg_cnt, pri_cnt, high_cnt],
                     marker_color=["#2563eb", "#10b981", "#8b5cf6"],
                     text=[kg_cnt, pri_cnt, high_cnt],
@@ -197,12 +204,12 @@ if sec == "dashboard":
 
     with c_mid:
         st.markdown('<div class="panel-box">', unsafe_allow_html=True)
-        st.markdown("**الحضور اليومي**")
+        st.markdown(f"**{T['chart_att']}**")
         donut_vals = [present_cnt, absent_today, late_cnt] if (present_cnt + absent_today + late_cnt) > 0 else [0, 0, 1]
         fig_donut = go.Figure(
             data=[
                 go.Pie(
-                    labels=["حاضر", "غائب", "متأخر"],
+                    labels=[T["present"], T["absent"], T["late"]],
                     values=donut_vals,
                     hole=0.68,
                     marker_colors=["#10b981", "#ef4444", "#f59e0b"],
@@ -210,37 +217,37 @@ if sec == "dashboard":
                 )
             ]
         )
-        fig_donut.add_annotation(text=f"{total_students}<br>إجمالي الطلاب", x=0.5, y=0.5, showarrow=False, font=dict(size=13))
+        fig_donut.add_annotation(text=f"{total_students}<br>{T['kpi_students']}", x=0.5, y=0.5, showarrow=False, font=dict(size=12))
         fig_donut.update_layout(height=250, margin=dict(l=10, r=10, t=20, b=10), showlegend=True)
         st.plotly_chart(fig_donut, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     with c_right:
         st.markdown('<div class="panel-box">', unsafe_allow_html=True)
-        st.markdown("**التنبيهات**")
+        st.markdown(f"**{T['alerts']}**")
         rem_students = len(st_df[(st_df["tuition_fee"] - st_df["paid_amount"]) > 0]) if not st_df.empty else 0
-        st.write(f"• {total_students} طالب فعال في النظام — معلومات التسجيل")
-        st.write(f"• {rem_students} سجل رسوم لديه متبقي — يتطلب متابعة")
-        st.write(f"• {len(acad_df)} سجل أكاديمي / درجة مدخلة — نتائج الطلاب")
+        st.write(f"• {total_students} — {T['students']}")
+        st.write(f"• {rem_students} — {T['kpi_rem']}")
+        st.write(f"• {len(acad_df)} — {T['exams']}")
         st.markdown("</div>", unsafe_allow_html=True)
 
     b_left, b_mid, b_right = st.columns([1.3, 1.1, 1.0])
     with b_left:
         st.markdown('<div class="panel-box">', unsafe_allow_html=True)
-        st.markdown("**آخر النشاط**")
+        st.markdown(f"**{T['recent_activity']}**")
         if not acad_df.empty:
             st.dataframe(acad_df[["rec_date", "student_id", "subject", "score"]].head(5), use_container_width=True, hide_index=True)
         else:
-            st.caption("لا توجد نشاطات أكاديمية مسجلة بعد.")
+            st.caption(T["section_ready"])
         st.markdown("</div>", unsafe_allow_html=True)
 
     with b_mid:
         st.markdown('<div class="panel-box">', unsafe_allow_html=True)
-        st.markdown("**الجدول الدراسي اليوم**")
+        st.markdown(f"**{T['today_schedule']}**")
         st.dataframe(
             pd.DataFrame([
-                {"الوقت": "08:00 - 08:45", "الصف": "KG-1 / A", "المادة": "القرآن واللغة", "القاعة": "R-101"},
-                {"الوقت": "08:50 - 09:35", "الصف": "Grade 5 / A", "المادة": "الرياضيات", "القاعة": "R-204"},
+                {"Time": "08:00 - 08:45", "Class": "KG-1 / A", "Subject": "Quran & Language", "Room": "R-101"},
+                {"Time": "08:50 - 09:35", "Class": "Grade 5 / A", "Subject": "Mathematics", "Room": "R-204"},
             ]),
             use_container_width=True,
             hide_index=True,
@@ -249,72 +256,58 @@ if sec == "dashboard":
 
     with b_right:
         st.markdown('<div class="panel-box">', unsafe_allow_html=True)
-        st.markdown("**اختصارات سريعة**")
-        if st.button("+ تسجيل طالب", use_container_width=True):
+        st.markdown(f"**{T['quick_actions']}**")
+        if st.button(T["add_student_btn"], use_container_width=True):
             st.session_state.active_section = "students"
             st.rerun()
-        if st.button("+ تسجيل دفعة / رسوم", use_container_width=True):
+        if st.button(T["add_pay_btn"], use_container_width=True):
             st.session_state.active_section = "finance"
             st.rerun()
-        if st.button("📊 التقارير و Excel", use_container_width=True):
+        if st.button(T["open_reports_btn"], use_container_width=True):
             st.session_state.active_section = "reports"
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
 elif sec == "students":
-    st.subheader("الطلاب والملف الموحد")
+    st.subheader(T["students"])
     with st.form("add_st_form", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
-        full_name = c1.text_input("اسم الطالب")
-        parent_name = c2.text_input("ولي الأمر")
-        phone = c3.text_input("رقم الهاتف")
+        full_name = c1.text_input("Student / الطالب / قوتابی")
+        parent_name = c2.text_input("Parent / ولي الأمر / بەخێوکەر")
+        phone = c3.text_input("Phone / الهاتف / مۆبایل")
         s1, s2, s3, s4 = st.columns(4)
-        st_stage = s1.selectbox("المرحلة", ["kg", "primary", "high"])
-        st_grade = s2.text_input("الصف", value="KG-1")
-        st_sec = s3.text_input("الشعبة", value="A")
-        fee = s4.number_input("الرسوم السنوية (د.ع)", min_value=0.0, step=100000.0, value=1500000.0)
-        if st.form_submit_button("حفظ الطالب") and full_name.strip():
+        st_stage = s1.selectbox(T["stages"], ["kg", "primary", "high"])
+        st_grade = s2.text_input("Grade / الصف / پۆل", value="KG-1")
+        st_sec = s3.text_input("Section / الشعبة / هۆبە", value="A")
+        fee = s4.number_input(f"{T['kpi_income']} ({T['currency']})", min_value=0.0, step=100000.0, value=1500000.0)
+        if st.form_submit_button(T["add_student_btn"]) and full_name.strip():
             db.add_student(selected_year, full_name.strip(), parent_name.strip(), phone.strip(), st_stage, st_grade.strip(), st_sec.strip(), fee, st.session_state.username)
-            st.success("تم حفظ الطالب.")
+            st.success("OK")
             st.rerun()
     if not st_df.empty:
         st.dataframe(st_df, use_container_width=True)
 
 elif sec == "finance":
-    st.subheader("الرسوم والدفعات والميزانية")
+    st.subheader(T["finance"])
     if not st_df.empty:
         opts = {f"#{r['id']} - {r['full_name']}": int(r["id"]) for _, r in st_df.iterrows()}
-        sel = st.selectbox("اختر الطالب لتسجيل دفعة", list(opts.keys()))
+        sel = st.selectbox(T["students"], list(opts.keys()))
         with st.form("pay_student_form", clear_on_submit=True):
-            amt = st.number_input("مبلغ الدفعة (د.ع)", min_value=0.0, step=50000.0)
-            note = st.text_input("ملاحظة الدفعة", value="دفعة رسوم")
-            p_date = st.date_input("التاريخ", datetime.today())
-            if st.form_submit_button("تسجيل الدفعة وإصدار إيصال") and amt > 0:
+            amt = st.number_input(f"{T['add_pay_btn']} ({T['currency']})", min_value=0.0, step=50000.0)
+            note = st.text_input("Note / ملاحظة / تێبینی", value="Installment")
+            p_date = st.date_input("Date / التاريخ / بەروار", datetime.today())
+            if st.form_submit_button(T["add_pay_btn"]) and amt > 0:
                 rcpt = db.record_student_payment(opts[sel], amt, p_date, note, st.session_state.username)
-                st.success(f"تم إصدار الإيصال رقم #{rcpt}")
+                st.success(f"Receipt #{rcpt}")
                 st.rerun()
-
-    st.markdown("---")
-    with st.form("tx_form", clear_on_submit=True):
-        c1, c2, c3, c4 = st.columns(4)
-        t_stage = c1.selectbox("المرحلة", ["kg", "primary", "high"])
-        t_type = c2.selectbox("النوع", ["income", "expense"])
-        t_cat = c3.text_input("البند", value="رسوم / مصروفات")
-        t_amt = c4.number_input("المبلغ (د.ع)", min_value=0.0, step=50000.0)
-        t_desc = st.text_input("البيان")
-        t_date = st.date_input("تاريخ الحركة", datetime.today())
-        if st.form_submit_button("ترحيل للخزينة") and t_amt > 0:
-            db.add_transaction(selected_year, t_stage, t_type, t_cat, t_amt, t_desc, t_date, st.session_state.username)
-            st.success("تم الترحيل.")
-            st.rerun()
     if not tx_df.empty:
         st.dataframe(tx_df, use_container_width=True)
 
 elif sec == "reports":
-    st.subheader("التقارير وتصدير Excel والنسخ الاحتياطي")
+    st.subheader(T["reports"])
     if not tx_df.empty:
-        period = st.selectbox("الفترة", ["daily", "weekly", "monthly", "yearly"])
-        ref_d = st.date_input("تاريخ المرجع", datetime.today())
+        period = st.selectbox("Period", ["daily", "weekly", "monthly", "yearly"])
+        ref_d = st.date_input("Date", datetime.today())
         if period == "daily":
             rep = tx_df[tx_df["t_date"] == ref_d]
         elif period == "weekly":
@@ -331,17 +324,17 @@ elif sec == "reports":
         buf = io.BytesIO()
         with pd.ExcelWriter(buf, engine="openpyxl") as writer:
             rep.to_excel(writer, index=False, sheet_name="Report")
-        st.download_button("تصدير التقرير بصيغة Excel", data=buf.getvalue(), file_name=f"legends_{period}_{ref_d}.xlsx")
+        st.download_button("Excel", data=buf.getvalue(), file_name=f"legends_{period}_{ref_d}.xlsx")
 
     with open(db.DB_NAME, "rb") as fp:
-        st.download_button("تحميل نسخة احتياطية (.db)", data=fp.read(), file_name=f"legends_backup_{datetime.today().strftime('%Y%m%d')}.db")
+        st.download_button("Backup (.db)", data=fp.read(), file_name=f"legends_backup_{datetime.today().strftime('%Y%m%d')}.db")
     if st.session_state.role == "admin":
-        up = st.file_uploader("استعادة نسخة احتياطية (.db)", type=["db"])
+        up = st.file_uploader("Restore (.db)", type=["db"])
         if up is not None:
             with open(db.DB_NAME, "wb") as out_f:
                 out_f.write(up.getbuffer())
-            st.success("تمت الاستعادة.")
+            st.success("Restored.")
 
 else:
-    st.subheader(f"قسم: {sec}")
-    st.info("تم تهيئة القسم ضمن النظام. يمكنك طلب تفعيل تفاصيله في أي وقت.")
+    st.subheader(T.get(sec, sec))
+    st.info(T["section_ready"])

@@ -197,3 +197,20 @@ def get_audit_log():
     df = pd.read_sql_query("SELECT * FROM audit_log ORDER BY id DESC LIMIT 200", conn)
     conn.close()
     return df
+    def create_user(new_username: str, new_password: str, role: str, admin_user: str):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute(
+        "INSERT OR REPLACE INTO users (username, password, role) VALUES (?, ?, ?)",
+        (new_username.strip(), hash_pass(new_password), role),
+    )
+    conn.commit()
+    conn.close()
+    log_action(admin_user, "MANAGE_USER", f"Saved user '{new_username.strip()}' with role '{role}'")
+
+
+def get_users():
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql_query("SELECT username, role FROM users ORDER BY username ASC", conn)
+    conn.close()
+    return df

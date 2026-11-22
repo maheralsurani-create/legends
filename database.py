@@ -50,11 +50,20 @@ def init_db():
     c.execute("""CREATE TABLE IF NOT EXISTS student_payments (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     student_id INTEGER,
+                    receipt_no TEXT,
                     amount REAL,
                     pay_date DATE,
                     note TEXT,
                     created_by TEXT
                 )""")
+
+    c.execute("PRAGMA table_info(student_payments)")
+    sp_cols = {row[1].lower() for row in c.fetchall()}
+    if "receipt_no" not in sp_cols:
+        try:
+            c.execute("ALTER TABLE student_payments ADD COLUMN receipt_no TEXT")
+        except sqlite3.OperationalError:
+            pass
 
     c.execute("""CREATE TABLE IF NOT EXISTS academic_records (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,6 +82,7 @@ def init_db():
                     stage TEXT,
                     t_type TEXT,
                     category TEXT,
+                    receipt_no TEXT,
                     amount REAL,
                     description TEXT,
                     t_date DATE,
@@ -87,6 +97,7 @@ def init_db():
         ("stage", "TEXT"),
         ("t_type", "TEXT"),
         ("category", "TEXT"),
+        ("receipt_no", "TEXT"),
         ("amount", "REAL"),
         ("description", "TEXT"),
         ("t_date", "DATE"),
@@ -237,7 +248,14 @@ def get_students(academic_year=None):
     return df
 
 
-def record_student_payment(student_id: int, amount: float, pay_date, note: str, username: str):
+def record_student_payment(
+    student_id: int,
+    amount: float,
+    pay_date,
+    note: str,
+    username: str,
+    receipt_no: str = "",
+):
     conn = sqlite3.connect(DB_NAME, timeout=30)
     c = conn.cursor()
     c.execute(
@@ -252,28 +270,51 @@ def record_student_payment(student_id: int, amount: float, pay_date, note: str, 
     full_name, stage, yr, cur_paid = st
     amt = float(amount)
     new_paid = float(cur_paid) + amt
+    clean_rcpt = str(receipt_no).strip() if receipt_no else ""
 
     c.execute("UPDATE students SET paid_amount=? WHERE id=?", (new_paid, int(student_id)))
     c.execute(
-        "INSERT INTO student_payments (student_id, amount, pay_date, note, created_by) VALUES (?, ?, ?, ?, ?)",
-        (int(student_id), amt, str(pay_date), note, username),
+        """INSERT INTO student_payments (student_id, receipt_no, amount, pay_date, note, created_by)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (int(student_id), clean_rcpt, amt, str(pay_date), note, username),
     )
-    receipt_id = c.lastrowid
+    payment_id = c.lastrowid
+    final_receipt_code = clean_rcpt if clean_rcpt else f"RCPT-{payment_id}"
+    if not clean_rcpt:
+        c.execute("UPDATE student_payments SET receipt_no=? WHERE id=?", (final_receipt_code, payment_id))
+
     c.execute(
         """INSERT INTO transactions
-           (academic_year, stage, t_type, category, amount, description, t_date, student_id, created_by)
-           VALUES (?, ?, 'income', 'Tuition / رسوم دراسية', ?, ?, ?, ?, ?)""",
-        (yr, stage, amt, f"Receipt #{receipt_id} - {full_name} ({note})", str(pay_date), int(student_id), username),
+           (academic_year, stage, t_type, category, receipt_no, amount, description, t_date, student_id, created_by)
+           VALUES (?, ?, 'income', 'Tuition / رسوم دراسية', ?, ?, ?, ?, ?, ?)""",
+        (
+            yr,
+            stage,
+            final_receipt_code,
+            amt,
+            f"Receipt [{final_receipt_code}] - {full_name} ({note})",
+            str(pay_date),
+            int(student_id),
+            username,
+        ),
     )
     conn.commit()
     conn.close()
-    log_action(username, "PAYMENT_RECEIPT", f"Receipt #{receipt_id} for {full_name} (#{student_id}): {amt:,.0f} IQD")
-    return receipt_id
+    log_action(
+        username,
+        "PAYMENT_RECEIPT",
+        f"Receipt [{final_receipt_code}] (#{payment_id}) for {full_name} (#{student_id}): {amt:,.0f} IQD",
+    )
+    return final_receipt_code
 
 
 def get_student_payments(student_id: int):
     conn = sqlite3.connect(DB_NAME, timeout=30)
-    df = pd.read_sql_query("SELECT * FROM student_payments WHERE student_id=? ORDER BY id DESC", conn, params=(int(student_id),))
+    df = pd.read_sql_query(
+        "SELECT * FROM student_payments WHERE student_id=? ORDER BY id DESC",
+        conn,
+        params=(int(student_id),),
+    )
     conn.close()
     return df
 
@@ -281,7 +322,7 @@ def get_student_payments(student_id: int):
 def get_all_payments():
     conn = sqlite3.connect(DB_NAME, timeout=30)
     df = pd.read_sql_query(
-        """SELECT p.id AS receipt_id, p.student_id, s.full_name AS student_name,
+        """SELECT p.id AS payment_id, p.receipt_no, p.student_id, s.full_name AS student_name,
                   s.stage, s.grade, s.section, p.amount, p.pay_date, p.note, p.created_by
            FROM student_payments p
            LEFT JOIN students s ON p.student_id = s.id
@@ -469,19 +510,24 @@ def delete_schedule(schedule_id: int, username: str):
     log_action(username, "DELETE_SCHEDULE", f"Deleted schedule #{schedule_id}")
 
 
-def add_transaction(academic_year, stage, t_type, category, amount, description, t_date, username):
+def add_transaction(academic_year, stage, t_type, category, amount, description, t_date, username, receipt_no: str = ""):
     conn = sqlite3.connect(DB_NAME, timeout=30)
     c = conn.cursor()
+    clean_rcpt = str(receipt_no).strip() if receipt_no else ""
     c.execute(
         """INSERT INTO transactions
-           (academic_year, stage, t_type, category, amount, description, t_date, student_id, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)""",
-        (academic_year, stage, t_type, category, float(amount), description, str(t_date), username),
+           (academic_year, stage, t_type, category, receipt_no, amount, description, t_date, student_id, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)""",
+        (academic_year, stage, t_type, category, clean_rcpt, float(amount), description, str(t_date), username),
     )
     tx_id = c.lastrowid
     conn.commit()
     conn.close()
-    log_action(username, "TREASURY_TX", f"TX #{tx_id} [{t_type}] {category}: {float(amount):,.0f} IQD - {description}")
+    log_action(
+        username,
+        "TREASURY_TX",
+        f"TX #{tx_id} [{t_type}] Rcpt:{clean_rcpt or '-'} {category}: {float(amount):,.0f} IQD - {description}",
+    )
 
 
 def get_transactions():
@@ -524,7 +570,6 @@ def get_users():
     df = pd.read_sql_query("SELECT username, role FROM users ORDER BY username ASC", conn)
     conn.close()
     return df
-    import os
 
 
 def reset_all_data(username: str):

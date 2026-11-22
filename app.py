@@ -91,7 +91,7 @@ st.markdown(
             background: linear-gradient(135deg, #f4f7fb 0%, #eef2f7 100%);
         }}
 
-.login-card {{
+        .login-card {{
             max-width: 460px;
             margin: 28px auto 14px auto;
             background: #ffffff;
@@ -106,9 +106,6 @@ st.markdown(
                 margin: 12px auto 10px auto;
                 padding: 18px 16px;
             }}
-        }}
-            box-shadow: 0 14px 35px rgba(15, 23, 42, 0.08);
-            border: 1px solid #e2e8f0;
         }}
 
         .login-logo-wrap {{
@@ -611,13 +608,24 @@ elif sec == "students":
                 with col_pay:
                     st.markdown(f"#### {T.get('pay_box_title', 'Payments')}")
                     with st.form("unified_pay_form", clear_on_submit=True):
+                        rcpt_input = st.text_input(
+                            T.get("receipt_no", "Receipt No."),
+                            placeholder=T.get("receipt_no_ph", "REC-1001"),
+                        )
                         pay_val = st.number_input(f"{T.get('pay_amount', 'Amount')} ({T['currency']})", min_value=0.0, step=50000.0)
                         pay_dt = st.date_input(T.get("pay_date", "Date"), datetime.today())
                         pay_nt = st.text_input(T.get("pay_note", "Note"), value="Installment")
                         if st.form_submit_button(T.get("pay_receipt_btn", "Pay")) and pay_val > 0:
-                            rcpt_no = db.record_student_payment(sid, pay_val, pay_dt, pay_nt, st.session_state.username)
+                            saved_rcpt = db.record_student_payment(
+                                sid,
+                                pay_val,
+                                pay_dt,
+                                pay_nt,
+                                st.session_state.username,
+                                receipt_no=rcpt_input,
+                            )
                             st.session_state["last_receipt"] = {
-                                "receipt_no": rcpt_no,
+                                "receipt_no": saved_rcpt,
                                 "student": s_info["full_name"],
                                 "grade": f"{s_info['grade']} / {s_info['section']}",
                                 "amount": pay_val,
@@ -633,7 +641,7 @@ elif sec == "students":
                             f"""
                             <div class="panel-box" style="border: 2px solid #059669;">
                                 <h4>{T['school_name']}</h4>
-                                <p><strong>#</strong> {lr['receipt_no']} | <strong>{T.get('pay_date', 'Date')}:</strong> {lr['date']}</p>
+                                <p><strong>{T.get('receipt_no', 'Receipt No.')}:</strong> {lr['receipt_no']} | <strong>{T.get('pay_date', 'Date')}:</strong> {lr['date']}</p>
                                 <p><strong>{T.get('full_name', 'Student')}:</strong> {lr['student']} ({lr['grade']})</p>
                                 <p><strong>{T.get('pay_amount', 'Amount')}:</strong> {lr['amount']:,.0f} {T['currency']}</p>
                                 <p><strong>{T['kpi_rem']}:</strong> {lr['remaining_after']:,.0f} {T['currency']}</p>
@@ -878,26 +886,74 @@ elif sec == "finance":
     if not st_df.empty:
         opts = {f"#{r['id']} - {r['full_name']}": int(r["id"]) for _, r in st_df.iterrows()}
         sel = st.selectbox(T["students"], list(opts.keys()))
+        sel_row = st_df[st_df["id"] == opts[sel]].iloc[0]
         with st.form("pay_student_form", clear_on_submit=True):
+            rcpt_no = st.text_input(
+                T.get("receipt_no", "Receipt No."),
+                placeholder=T.get("receipt_no_ph", "REC-1001"),
+            )
             amt = st.number_input(f"{T['add_pay_btn']} ({T['currency']})", min_value=0.0, step=50000.0)
             note = st.text_input("Note / ملاحظة / تێبینی", value="Installment")
             p_date = st.date_input("Date / التاريخ / بەروار", datetime.today())
             if st.form_submit_button(T["add_pay_btn"]) and amt > 0:
-                rcpt = db.record_student_payment(opts[sel], amt, p_date, note, st.session_state.username)
-                st.success(f"Receipt #{rcpt}")
+                saved_rcpt = db.record_student_payment(
+                    opts[sel],
+                    amt,
+                    p_date,
+                    note,
+                    st.session_state.username,
+                    receipt_no=rcpt_no,
+                )
+                st.session_state["last_receipt"] = {
+                    "receipt_no": saved_rcpt,
+                    "student": sel_row["full_name"],
+                    "grade": f"{sel_row['grade']} / {sel_row['section']}",
+                    "amount": amt,
+                    "date": str(p_date),
+                    "note": note,
+                    "remaining_after": max(0.0, float(sel_row["tuition_fee"]) - (float(sel_row["paid_amount"]) + float(amt))),
+                }
+                st.success(f"{T.get('receipt_no', 'Receipt No.')}: {saved_rcpt}")
                 st.rerun()
+
+        if "last_receipt" in st.session_state and st.session_state["last_receipt"]["student"] == sel_row["full_name"]:
+            lr = st.session_state["last_receipt"]
+            st.markdown(
+                f"""
+                <div class="panel-box" style="border: 2px solid #059669;">
+                    <h4>{T['school_name']}</h4>
+                    <p><strong>{T.get('receipt_no', 'Receipt No.')}:</strong> {lr['receipt_no']} | <strong>{T.get('pay_date', 'Date')}:</strong> {lr['date']}</p>
+                    <p><strong>{T.get('full_name', 'Student')}:</strong> {lr['student']} ({lr['grade']})</p>
+                    <p><strong>{T.get('pay_amount', 'Amount')}:</strong> {lr['amount']:,.0f} {T['currency']}</p>
+                    <p><strong>{T['kpi_rem']}:</strong> {lr['remaining_after']:,.0f} {T['currency']}</p>
+                    <p><strong>{T.get('pay_note', 'Note')}:</strong> {lr['note']}</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
     st.markdown("---")
     with st.form("tx_form", clear_on_submit=True):
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3, c4, c5 = st.columns(5)
         t_stage = c1.selectbox(T["kpi_stages"], ["kg", "primary", "high"], format_func=lambda x: stage_labels[x])
         t_type = c2.selectbox("Type / النوع", ["income", "expense"])
         t_cat = c3.text_input("Category / البند", value="رسوم / مصروفات")
-        t_amt = c4.number_input(f"Amount ({T['currency']})", min_value=0.0, step=50000.0)
+        t_rcpt = c4.text_input(T.get("receipt_no", "Receipt No."), placeholder=T.get("receipt_no_ph", "REC-1001"))
+        t_amt = c5.number_input(f"Amount ({T['currency']})", min_value=0.0, step=50000.0)
         t_desc = st.text_input("Description / البيان")
         t_date = st.date_input("Date / التاريخ", datetime.today())
         if st.form_submit_button("Save TX") and t_amt > 0:
-            db.add_transaction(selected_year, t_stage, t_type, t_cat, t_amt, t_desc, t_date, st.session_state.username)
+            db.add_transaction(
+                selected_year,
+                t_stage,
+                t_type,
+                t_cat,
+                t_amt,
+                t_desc,
+                t_date,
+                st.session_state.username,
+                receipt_no=t_rcpt,
+            )
             st.success("OK")
             st.rerun()
 

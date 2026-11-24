@@ -123,8 +123,8 @@ if "active_section" not in st.session_state:
 
 lang = st.session_state.lang
 T = UI_TEXT.get(lang, UI_TEXT["ar"])
-page_dir = T["dir"]
-page_align = T["align"]
+page_dir = T.get("dir", "rtl")
+page_align = T.get("align", "right")
 
 st.markdown(
     f"""
@@ -262,19 +262,19 @@ if not st.session_state.logged_in:
             f"""
             <div class="login-card">
                 {logo_html}
-                <div class="login-title">{T['school_name']}</div>
-                <div class="login-sub">{T['school_sub']}</div>
+                <div class="login-title">{T.get('school_name', 'Legends School & Kindergarten')}</div>
+                <div class="login-sub">{T.get('school_sub', '')}</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
         with st.container(border=True):
-            st.markdown(f"#### {T['login']}")
+            st.markdown(f"#### {T.get('login', 'Sign In')}")
             with st.form("login_form"):
-                u = st.text_input(T["username"], placeholder=T["username"])
-                p = st.text_input(T["password"], type="password", placeholder=T["password"])
-                if st.form_submit_button(T["login_btn"], use_container_width=True):
+                u = st.text_input(T.get("username", "Username"), placeholder=T.get("username", "Username"))
+                p = st.text_input(T.get("password", "Password"), type="password", placeholder=T.get("password", "Password"))
+                if st.form_submit_button(T.get("login_btn", "Login"), use_container_width=True):
                     role = db.verify_user(u.strip(), p)
                     if role:
                         st.session_state.logged_in = True
@@ -283,15 +283,15 @@ if not st.session_state.logged_in:
                         db.log_action(u.strip(), "LOGIN", "Logged into Legends SMS")
                         st.rerun()
                     else:
-                        st.error(T["wrong_creds"])
+                        st.error(T.get("wrong_creds", "Invalid credentials"))
     st.stop()
 
 st.markdown('<div class="top-header-card">', unsafe_allow_html=True)
 top_l, top_m, top_r = st.columns([2.3, 3.8, 3.1])
 with top_l:
-    role_label = T["role_admin"] if st.session_state.role == "admin" else T["role_user"]
+    role_label = T.get("role_admin", "Admin") if st.session_state.role == "admin" else T.get("role_user", "Staff")
     st.markdown(f"**👤 {st.session_state.username}**  \n<span style='color:#64748b;font-size:13px;'>{role_label}</span>", unsafe_allow_html=True)
-    if st.button(T["logout"], key="top_logout"):
+    if st.button(T.get("logout", "Logout"), key="top_logout"):
         st.session_state.logged_in = False
         st.rerun()
 
@@ -312,7 +312,7 @@ with top_r:
     with top_logo_col:
         render_school_logo(width=64)
     with top_title_col:
-        st.markdown(f"### {T['school_name']}\n<span style='color:#64748b;font-size:13px;'>{T['school_sub']}</span>", unsafe_allow_html=True)
+        st.markdown(f"### {T.get('school_name', 'Legends School')}\n<span style='color:#64748b;font-size:13px;'>{T.get('school_sub', '')}</span>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
 section_keys = [
@@ -333,16 +333,17 @@ section_keys = [
 
 with st.sidebar:
     render_school_logo(width=110)
-st.sidebar.markdown(f"### LEGENDS\n**{T['nav_title']}**")
+st.sidebar.markdown(f"### LEGENDS\n**{T.get('nav_title', 'Navigation')}**")
 for key in section_keys:
     is_active = st.session_state.active_section == key
-    btn_label = f"▶ {T[key]}" if is_active else T[key]
+    label_txt = T.get(key, key.capitalize())
+    btn_label = f"▶ {label_txt}" if is_active else label_txt
     if st.sidebar.button(btn_label, key=f"nav_{key}", use_container_width=True):
         st.session_state.active_section = key
         st.rerun()
 
 st.sidebar.markdown("---")
-selected_year = st.sidebar.selectbox(T["year"], ["2026-2027", "2025-2026", "2027-2028"], index=0)
+selected_year = st.sidebar.selectbox(T.get("year", "Academic Year"), ["2026-2027", "2025-2026", "2027-2028"], index=0)
 
 st_df = db.get_students(selected_year)
 tx_df = db.get_transactions()
@@ -356,15 +357,15 @@ schedules_df = db.get_schedules(selected_year)
 
 stage_labels = {
     "all": T.get("all_stages", "All"),
-    "kg": T["stage_kg"],
-    "primary": T["stage_pri"],
-    "high": T["stage_high"],
+    "kg": T.get("stage_kg", "KG"),
+    "primary": T.get("stage_pri", "Basic"),
+    "high": T.get("stage_high", "High"),
 }
 
 sec = st.session_state.active_section
 
 if sec == "dashboard":
-    st.subheader(T["dashboard"])
+    st.subheader(T.get("dashboard", "Dashboard"))
 
     total_students = len(st_df) if not st_df.empty else 0
     kg_cnt = len(st_df[st_df["stage"] == "kg"]) if not st_df.empty else 0
@@ -383,12 +384,12 @@ if sec == "dashboard":
     late_cnt = len(acad_df[acad_df["attendance"].astype(str).str.contains("متأخر|دواکەوتوو|Late", case=False, na=False)]) if not acad_df.empty else 0
 
     cards = [
-        ("linear-gradient(135deg, #1d4ed8, #2563eb)", T["kpi_students"], f"{total_students:,}", T["kpi_students_sub"]),
-        ("linear-gradient(135deg, #047857, #10b981)", T["kpi_teachers"], f"{len(teachers_df):,}", T["kpi_teachers_sub"]),
-        ("linear-gradient(135deg, #6d28d9, #8b5cf6)", T["kpi_stages"], "3", T["kpi_stages_sub"]),
-        ("linear-gradient(135deg, #b45309, #f59e0b)", T["kpi_absent"], f"{absent_today:,}", T["kpi_absent_sub"]),
-        ("linear-gradient(135deg, #15803d, #22c55e)", T["kpi_income"], f"{income_val:,.0f}", T["currency"]),
-        ("linear-gradient(135deg, #be123c, #f43f5e)", T["kpi_rem"], f"{remaining_val:,.0f}", T["currency"]),
+        ("linear-gradient(135deg, #1d4ed8, #2563eb)", T.get("kpi_students", "Students"), f"{total_students:,}", T.get("kpi_students_sub", "")),
+        ("linear-gradient(135deg, #047857, #10b981)", T.get("kpi_teachers", "Teachers"), f"{len(teachers_df):,}", T.get("kpi_teachers_sub", "")),
+        ("linear-gradient(135deg, #6d28d9, #8b5cf6)", T.get("kpi_stages", "Stages"), "3", T.get("kpi_stages_sub", "")),
+        ("linear-gradient(135deg, #b45309, #f59e0b)", T.get("kpi_absent", "Absent"), f"{absent_today:,}", T.get("kpi_absent_sub", "")),
+        ("linear-gradient(135deg, #15803d, #22c55e)", T.get("kpi_income", "Income"), f"{income_val:,.0f}", T.get("currency", "IQD")),
+        ("linear-gradient(135deg, #be123c, #f43f5e)", T.get("kpi_rem", "Remaining"), f"{remaining_val:,.0f}", T.get("currency", "IQD")),
     ]
     cols = st.columns(6)
     for col, (bg, title, val, sub) in zip(cols, cards):
@@ -407,11 +408,11 @@ if sec == "dashboard":
 
     with c_left:
         st.markdown('<div class="panel-box">', unsafe_allow_html=True)
-        st.markdown(f"**{T['chart_stages']}**")
+        st.markdown(f"**{T.get('chart_stages', 'Students by Stage')}**")
         fig_bar = go.Figure(
             data=[
                 go.Bar(
-                    x=[T["stage_kg"], T["stage_pri"], T["stage_high"]],
+                    x=[T.get("stage_kg", "KG"), T.get("stage_pri", "Basic"), T.get("stage_high", "High")],
                     y=[kg_cnt, pri_cnt, high_cnt],
                     marker_color=["#2563eb", "#10b981", "#8b5cf6"],
                     text=[kg_cnt, pri_cnt, high_cnt],
@@ -425,12 +426,12 @@ if sec == "dashboard":
 
     with c_mid:
         st.markdown('<div class="panel-box">', unsafe_allow_html=True)
-        st.markdown(f"**{T['chart_att']}**")
+        st.markdown(f"**{T.get('chart_att', 'Attendance')}**")
         donut_vals = [present_cnt, absent_today, late_cnt] if (present_cnt + absent_today + late_cnt) > 0 else [0, 0, 1]
         fig_donut = go.Figure(
             data=[
                 go.Pie(
-                    labels=[T["present"], T["absent"], T["late"]],
+                    labels=[T.get("present", "Present"), T.get("absent", "Absent"), T.get("late", "Late")],
                     values=donut_vals,
                     hole=0.68,
                     marker_colors=["#10b981", "#ef4444", "#f59e0b"],
@@ -438,40 +439,44 @@ if sec == "dashboard":
                 )
             ]
         )
-        fig_donut.add_annotation(text=f"{total_students}<br>{T['kpi_students']}", x=0.5, y=0.5, showarrow=False, font=dict(size=12))
+        fig_donut.add_annotation(text=f"{total_students}<br>{T.get('kpi_students', 'Students')}", x=0.5, y=0.5, showarrow=False, font=dict(size=12))
         fig_donut.update_layout(height=250, margin=dict(l=10, r=10, t=20, b=10), showlegend=True)
         st.plotly_chart(fig_donut, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     with c_right:
         st.markdown('<div class="panel-box">', unsafe_allow_html=True)
-        st.markdown(f"**{T['alerts']}**")
+        st.markdown(f"**{T.get('alerts', 'Alerts')}**")
         rem_students = len(st_df[(st_df["tuition_fee"] - st_df["paid_amount"]) > 0]) if not st_df.empty else 0
-        st.write(f"• {total_students} — {T['students']}")
-        st.write(f"• {rem_students} — {T['kpi_rem']}")
-        st.write(f"• {len(acad_df)} — {T['exams']}")
+        st.write(f"• {total_students} — {T.get('students', 'Students')}")
+        st.write(f"• {rem_students} — {T.get('kpi_rem', 'Remaining')}")
+        st.write(f"• {len(acad_df)} — {T.get('exams', 'Exams')}")
         st.markdown("</div>", unsafe_allow_html=True)
 
     b_left, b_mid, b_right = st.columns([1.3, 1.1, 1.0])
     with b_left:
         st.markdown('<div class="panel-box">', unsafe_allow_html=True)
-        st.markdown(f"**{T['recent_activity']}**")
+        st.markdown(f"**{T.get('recent_activity', 'Recent Activity')}**")
         if not acad_df.empty:
             st.dataframe(localize_df(acad_df[["rec_date", "student_name", "subject", "score"]].head(5), T, stage_labels), use_container_width=True, hide_index=True)
         else:
-            st.caption(T["section_ready"])
+            st.caption(T.get("section_ready", ""))
         st.markdown("</div>", unsafe_allow_html=True)
 
     with b_mid:
         st.markdown('<div class="panel-box">', unsafe_allow_html=True)
-        st.markdown(f"**{T['today_schedule']}**")
+        st.markdown(f"**{T.get('today_schedule', 'Today Schedule')}**")
         if not schedules_df.empty:
             st.dataframe(localize_df(schedules_df[["day_name", "time_slot", "grade", "subject_name", "room"]].head(5), T, stage_labels), use_container_width=True, hide_index=True)
         else:
+            col_time_lbl = T.get("time", T.get("col_time_slot", "Time"))
+            col_grade_lbl = T.get("grade", T.get("col_grade", "Grade"))
+            col_subj_lbl = T.get("subject", T.get("col_subject", "Subject"))
+            col_room_lbl = T.get("room", T.get("col_room", "Room"))
             st.dataframe(
                 pd.DataFrame([
-                    {T["time"]: "08:00 - 08:45", T["grade"]: "KG-1 / A", T["subject"]: "Quran & Language", T["room"]: "R-101"},
-                    {T["time"]: "08:50 - 09:35", T["grade"]: "Grade 5 / A", T["subject"]: "Mathematics", T["room"]: "R-204"},
+                    {col_time_lbl: "08:00 - 08:45", col_grade_lbl: "KG-1 / A", col_subj_lbl: "Quran & Language", col_room_lbl: "R-101"},
+                    {col_time_lbl: "08:50 - 09:35", col_grade_lbl: "Grade 5 / A", col_subj_lbl: "Mathematics", col_room_lbl: "R-204"},
                 ]),
                 use_container_width=True,
                 hide_index=True,
@@ -480,24 +485,24 @@ if sec == "dashboard":
 
     with b_right:
         st.markdown('<div class="panel-box">', unsafe_allow_html=True)
-        st.markdown(f"**{T['quick_actions']}**")
-        if st.button(T["add_student_btn"], use_container_width=True):
+        st.markdown(f"**{T.get('quick_actions', 'Quick Actions')}**")
+        if st.button(T.get("add_student_btn", "+ Add Student"), use_container_width=True):
             st.session_state.active_section = "students"
             st.rerun()
-        if st.button(T["add_pay_btn"], use_container_width=True):
+        if st.button(T.get("add_pay_btn", "+ Record Payment"), use_container_width=True):
             st.session_state.active_section = "finance"
             st.rerun()
-        if st.button(T["open_reports_btn"], use_container_width=True):
+        if st.button(T.get("open_reports_btn", "Reports"), use_container_width=True):
             st.session_state.active_section = "reports"
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
 elif sec == "students":
-    st.subheader(f"{T['students']} — {selected_year}")
+    st.subheader(f"{T.get('students', 'Students')} — {selected_year}")
 
     tab_add, tab_manage, tab_profile = st.tabs([
-        T["add_student_btn"],
-        f"{T['students']} ({T['kpi_students']})",
+        T.get("add_student_btn", "+ Add Student"),
+        f"{T.get('students', 'Students')} ({T.get('kpi_students', 'Total')})",
         T.get("tab_unified", "Unified Profile & Receipts"),
     ])
 
@@ -510,20 +515,20 @@ elif sec == "students":
 
             s1, s2, s3, s4 = st.columns(4)
             st_stage = s1.selectbox(
-                T["kpi_stages"],
+                T.get("kpi_stages", "Stage"),
                 ["kg", "primary", "high"],
                 format_func=lambda x: stage_labels[x],
             )
             st_grade = s2.text_input(T.get("grade", "Grade"), value="KG-1")
             st_sec = s3.text_input(T.get("section", "Section"), value="A")
             fee = s4.number_input(
-                f"{T.get('tuition_fee', 'Tuition')} ({T['currency']})",
+                f"{T.get('tuition_fee', 'Tuition')} ({T.get('currency', 'IQD')})",
                 min_value=0.0,
                 step=100000.0,
                 value=1500000.0,
             )
 
-            if st.form_submit_button(T["add_student_btn"]) and full_name.strip():
+            if st.form_submit_button(T.get("add_student_btn", "+ Add Student")) and full_name.strip():
                 db.add_student(
                     selected_year,
                     full_name.strip(),
@@ -535,7 +540,7 @@ elif sec == "students":
                     fee,
                     st.session_state.username,
                 )
-                st.success(T["add_student_btn"])
+                st.success(T.get("add_student_btn", "Saved"))
                 st.rerun()
 
     with tab_manage:
@@ -589,7 +594,7 @@ elif sec == "students":
                     stage_keys = ["kg", "primary", "high"]
                     cur_st_idx = stage_keys.index(target_row["stage"]) if target_row["stage"] in stage_keys else 0
                     e_stage = e4.selectbox(
-                        T["kpi_stages"],
+                        T.get("kpi_stages", "Stage"),
                         stage_keys,
                         index=cur_st_idx,
                         format_func=lambda x: stage_labels[x],
@@ -597,7 +602,7 @@ elif sec == "students":
                     e_grade = e5.text_input(T.get("grade", "Grade"), value=str(target_row["grade"]))
                     e_sec = e6.text_input(T.get("section", "Section"), value=str(target_row["section"]))
                     e_fee = e7.number_input(
-                        f"{T.get('tuition_fee', 'Tuition')} ({T['currency']})",
+                        f"{T.get('tuition_fee', 'Tuition')} ({T.get('currency', 'IQD')})",
                         min_value=0.0,
                         step=100000.0,
                         value=float(target_row["tuition_fee"]),
@@ -648,11 +653,12 @@ elif sec == "students":
                 total_f = float(s_info["tuition_fee"])
                 paid_f = float(s_info["paid_amount"])
                 rem_f = max(0.0, total_f - paid_f)
+                curr_lbl = T.get("currency", "IQD")
 
                 m1, m2, m3 = st.columns(3)
-                m1.metric(T.get("total_fees", "Total Fees"), f"{total_f:,.0f} {T['currency']}")
-                m2.metric(T.get("paid_amount", "Paid"), f"{paid_f:,.0f} {T['currency']}")
-                m3.metric(T["kpi_rem"], f"{rem_f:,.0f} {T['currency']}")
+                m1.metric(T.get("total_fees", "Total Fees"), f"{total_f:,.0f} {curr_lbl}")
+                m2.metric(T.get("paid_amount", "Paid"), f"{paid_f:,.0f} {curr_lbl}")
+                m3.metric(T.get("kpi_rem", "Remaining"), f"{rem_f:,.0f} {curr_lbl}")
 
                 col_pay, col_acad = st.columns(2)
                 with col_pay:
@@ -662,7 +668,7 @@ elif sec == "students":
                             T.get("receipt_no", "Receipt No."),
                             placeholder=T.get("receipt_no_ph", "REC-1001"),
                         )
-                        pay_val = st.number_input(f"{T.get('pay_amount', 'Amount')} ({T['currency']})", min_value=0.0, step=50000.0)
+                        pay_val = st.number_input(f"{T.get('pay_amount', 'Amount')} ({curr_lbl})", min_value=0.0, step=50000.0)
                         pay_dt = st.date_input(T.get("pay_date", "Date"), datetime.today())
                         pay_nt = st.text_input(T.get("pay_note", "Note"), value="Installment")
                         if st.form_submit_button(T.get("pay_receipt_btn", "Pay")) and pay_val > 0:
@@ -690,11 +696,11 @@ elif sec == "students":
                         st.markdown(
                             f"""
                             <div class="panel-box" style="border: 2px solid #059669;">
-                                <h4>{T['school_name']}</h4>
+                                <h4>{T.get('school_name', 'Legends School')}</h4>
                                 <p><strong>{T.get('receipt_no', 'Receipt No.')}:</strong> {lr['receipt_no']} | <strong>{T.get('pay_date', 'Date')}:</strong> {lr['date']}</p>
                                 <p><strong>{T.get('full_name', 'Student')}:</strong> {lr['student']} ({lr['grade']})</p>
-                                <p><strong>{T.get('pay_amount', 'Amount')}:</strong> {lr['amount']:,.0f} {T['currency']}</p>
-                                <p><strong>{T['kpi_rem']}:</strong> {lr['remaining_after']:,.0f} {T['currency']}</p>
+                                <p><strong>{T.get('pay_amount', 'Amount')}:</strong> {lr['amount']:,.0f} {curr_lbl}</p>
+                                <p><strong>{T.get('kpi_rem', 'Remaining')}:</strong> {lr['remaining_after']:,.0f} {curr_lbl}</p>
                                 <p><strong>{T.get('pay_note', 'Note')}:</strong> {lr['note']}</p>
                             </div>
                             """,
@@ -721,16 +727,16 @@ elif sec == "students":
                 )
 
 elif sec == "teachers":
-    st.subheader(f"{T['teachers']} — {selected_year}")
+    st.subheader(f"{T.get('teachers', 'Teachers')} — {selected_year}")
     with st.form("add_teacher_form", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         t_name = c1.text_input(T.get("full_name", "Full Name"))
         t_spec = c2.text_input(T.get("specialty", "Specialty"))
         t_phone = c3.text_input(T.get("phone", "Phone"))
         c4, c5 = st.columns(2)
-        t_stage = c4.selectbox(T["kpi_stages"], ["kg", "primary", "high"], format_func=lambda x: stage_labels[x])
+        t_stage = c4.selectbox(T.get("kpi_stages", "Stage"), ["kg", "primary", "high"], format_func=lambda x: stage_labels[x])
         t_grade = c5.text_input(T.get("grade", "Grade"), value="All Grades")
-        if st.form_submit_button(f"+ {T['teachers']}") and t_name.strip():
+        if st.form_submit_button(f"+ {T.get('teachers', 'Teacher')}") and t_name.strip():
             db.add_teacher(selected_year, t_name, t_spec, t_phone, t_stage, t_grade, st.session_state.username)
             st.rerun()
 
@@ -744,13 +750,13 @@ elif sec == "teachers":
         )
         if st.session_state.role == "admin":
             t_opts = {f"#{int(r['id'])} — {r['full_name']}": int(r["id"]) for _, r in teachers_df.iterrows()}
-            del_t_sel = st.selectbox(T["teachers"], list(t_opts.keys()), key="del_t_sel")
+            del_t_sel = st.selectbox(T.get("teachers", "Teachers"), list(t_opts.keys()), key="del_t_sel")
             if st.button(T.get("delete_btn", "🗑️ Delete"), key="btn_del_t"):
                 db.delete_teacher(t_opts[del_t_sel], st.session_state.username)
                 st.rerun()
 
 elif sec == "parents":
-    st.subheader(f"{T['parents']} — {selected_year}")
+    st.subheader(f"{T.get('parents', 'Parents')} — {selected_year}")
     if not st_df.empty:
         p_search = st.text_input(T.get("search_student", "Search"), key="parent_search_q").strip().lower()
         p_view = st_df[["id", "full_name", "parent_name", "phone", "stage", "grade", "section", "tuition_fee", "paid_amount"]].copy()
@@ -769,390 +775,4 @@ elif sec == "parents":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
     else:
-        st.info(T["section_ready"])
-
-elif sec == "stages":
-    st.subheader(f"{T['stages']} — {selected_year}")
-    st_rows = []
-    for s_key in ["kg", "primary", "high"]:
-        s_students = len(st_df[st_df["stage"] == s_key]) if not st_df.empty else 0
-        s_teachers = len(teachers_df[teachers_df["stage"] == s_key]) if not teachers_df.empty else 0
-        s_subjects = len(subjects_df[subjects_df["stage"] == s_key]) if not subjects_df.empty else 0
-        s_sched = len(schedules_df[schedules_df["stage"] == s_key]) if not schedules_df.empty else 0
-        st_rows.append({
-            T["kpi_stages"]: stage_labels[s_key],
-            T["students"]: s_students,
-            T["teachers"]: s_teachers,
-            T["subjects"]: s_subjects,
-            T["schedule"]: s_sched,
-        })
-    stages_summary_df = pd.DataFrame(st_rows)
-    st.dataframe(stages_summary_df, use_container_width=True, hide_index=True)
-    st.download_button(
-        "📥 Excel (.xlsx)",
-        data=to_excel_bytes({"Stages_Summary": stages_summary_df}),
-        file_name=f"legends_stages_{selected_year}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-
-elif sec == "subjects":
-    st.subheader(f"{T['subjects']} — {selected_year}")
-    with st.form("add_subject_form", clear_on_submit=True):
-        c1, c2, c3, c4 = st.columns(4)
-        sub_stage = c1.selectbox(T["kpi_stages"], ["kg", "primary", "high"], format_func=lambda x: stage_labels[x])
-        sub_grade = c2.text_input(T.get("grade", "Grade"), value="Grade 1")
-        sub_name = c3.text_input(T.get("subject", "Subject"))
-        sub_teacher = c4.text_input(T["teachers"])
-        if st.form_submit_button(f"+ {T['subjects']}") and sub_name.strip():
-            db.add_subject(selected_year, sub_stage, sub_grade, sub_name, sub_teacher, st.session_state.username)
-            st.rerun()
-
-    if not subjects_df.empty:
-        st.dataframe(localize_df(subjects_df, T, stage_labels), use_container_width=True, hide_index=True)
-        st.download_button(
-            "📥 Excel (.xlsx)",
-            data=to_excel_bytes({"Subjects": localize_df(subjects_df, T, stage_labels)}),
-            file_name=f"legends_subjects_{selected_year}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-        if st.session_state.role == "admin":
-            sub_opts = {f"#{int(r['id'])} — {r['subject_name']} ({r['grade']})": int(r["id"]) for _, r in subjects_df.iterrows()}
-            del_sub_sel = st.selectbox(T["subjects"], list(sub_opts.keys()), key="del_sub_sel")
-            if st.button(T.get("delete_btn", "🗑️ Delete"), key="btn_del_sub"):
-                db.delete_subject(sub_opts[del_sub_sel], st.session_state.username)
-                st.rerun()
-
-elif sec == "schedule":
-    st.subheader(f"{T['schedule']} — {selected_year}")
-    with st.form("add_sched_form", clear_on_submit=True):
-        c1, c2, c3, c4 = st.columns(4)
-        sc_day = c1.selectbox(T.get("day", "Day"), ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
-        sc_time = c2.text_input(T.get("time", "Time"), value="08:00 - 08:45")
-        sc_stage = c3.selectbox(T["kpi_stages"], ["kg", "primary", "high"], format_func=lambda x: stage_labels[x])
-        sc_grade = c4.text_input(T.get("grade", "Grade"), value="Grade 1")
-        c5, c6, c7 = st.columns(3)
-        sc_sec = c5.text_input(T.get("section", "Section"), value="A")
-        sc_subj = c6.text_input(T.get("subject", "Subject"))
-        sc_room = c7.text_input(T.get("room", "Room"), value="R-101")
-        if st.form_submit_button(f"+ {T['schedule']}") and sc_subj.strip():
-            db.add_schedule(selected_year, sc_day, sc_time, sc_stage, sc_grade, sc_sec, sc_subj, sc_room, st.session_state.username)
-            st.rerun()
-
-    if not schedules_df.empty:
-        st.dataframe(localize_df(schedules_df, T, stage_labels), use_container_width=True, hide_index=True)
-        st.download_button(
-            "📥 Excel (.xlsx)",
-            data=to_excel_bytes({"Schedule": localize_df(schedules_df, T, stage_labels)}),
-            file_name=f"legends_schedule_{selected_year}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-        if st.session_state.role == "admin":
-            sc_opts = {f"#{int(r['id'])} — {r['day_name']} {r['time_slot']} ({r['subject_name']})": int(r["id"]) for _, r in schedules_df.iterrows()}
-            del_sc_sel = st.selectbox(T["schedule"], list(sc_opts.keys()), key="del_sc_sel")
-            if st.button(T.get("delete_btn", "🗑️ Delete"), key="btn_del_sc"):
-                db.delete_schedule(sc_opts[del_sc_sel], st.session_state.username)
-                st.rerun()
-
-elif sec == "attendance":
-    st.subheader(f"{T['attendance']} — {selected_year}")
-    if not st_df.empty:
-        st_map = {f"#{int(r['id'])} — {r['full_name']} ({r['grade']} / {r['section']})": int(r["id"]) for _, r in st_df.iterrows()}
-        with st.form("att_form", clear_on_submit=True):
-            c1, c2, c3 = st.columns(3)
-            att_st = c1.selectbox(T["students"], list(st_map.keys()))
-            att_dt = c2.date_input(T.get("pay_date", "Date"), datetime.today())
-            att_status = c3.selectbox(T["attendance"], [T["present"], T["absent"], T["late"]])
-            if st.form_submit_button(T.get("save_btn", "💾 Save")):
-                db.add_academic_record(st_map[att_st], selected_year, att_dt, att_status, "-", "-", st.session_state.username)
-                st.rerun()
-
-    if not acad_df.empty:
-        st.dataframe(localize_df(acad_df, T, stage_labels), use_container_width=True, hide_index=True)
-        st.download_button(
-            "📥 Excel (.xlsx)",
-            data=to_excel_bytes({"Attendance": localize_df(acad_df, T, stage_labels)}),
-            file_name=f"legends_attendance_{selected_year}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-
-elif sec == "exams":
-    st.subheader(f"{T['exams']} — {selected_year}")
-    if not st_df.empty:
-        st_map = {f"#{int(r['id'])} — {r['full_name']} ({r['grade']} / {r['section']})": int(r["id"]) for _, r in st_df.iterrows()}
-        with st.form("exam_form", clear_on_submit=True):
-            c1, c2, c3, c4 = st.columns(4)
-            ex_st = c1.selectbox(T["students"], list(st_map.keys()))
-            ex_dt = c2.date_input(T.get("pay_date", "Date"), datetime.today())
-            ex_subj = c3.text_input(T.get("subject", "Subject"), value="Mathematics")
-            ex_score = c4.text_input(T.get("score", "Score"), value="95 / 100")
-            if st.form_submit_button(T.get("save_btn", "💾 Save")) and ex_subj.strip() and ex_score.strip():
-                db.add_academic_record(st_map[ex_st], selected_year, ex_dt, T["present"], ex_subj, ex_score, st.session_state.username)
-                st.rerun()
-
-    if not acad_df.empty:
-        st.dataframe(localize_df(acad_df, T, stage_labels), use_container_width=True, hide_index=True)
-        st.download_button(
-            "📥 Excel (.xlsx)",
-            data=to_excel_bytes({"Exams": localize_df(acad_df, T, stage_labels)}),
-            file_name=f"legends_exams_{selected_year}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-
-elif sec == "certificates":
-    st.subheader(f"{T['certificates']} — {selected_year}")
-    if not st_df.empty:
-        cert_map = {f"#{int(r['id'])} — {r['full_name']} ({r['grade']} / {r['section']})": int(r["id"]) for _, r in st_df.iterrows()}
-        cert_sel = st.selectbox(T["students"], list(cert_map.keys()), key="cert_sel")
-        cid = cert_map[cert_sel]
-        c_row = st_df[st_df["id"] == cid].iloc[0]
-        c_acad = db.get_student_academic(cid)
-
-        st.markdown(
-            f"""
-            <div class="panel-box" style="border: 2px solid #1d4ed8;">
-                <h3>{T['school_name']}</h3>
-                <p>{T['school_sub']}</p>
-                <hr>
-                <p><strong>{T.get('full_name', 'Student')}:</strong> {c_row['full_name']}</p>
-                <p><strong>{T['year']}:</strong> {c_row['academic_year']} | <strong>{T['kpi_stages']}:</strong> {stage_labels.get(c_row['stage'], c_row['stage'])} — {c_row['grade']} / {c_row['section']}</p>
-                <p><strong>{T.get('parent_name', 'Guardian')}:</strong> {c_row['parent_name']} | <strong>{T.get('phone', 'Phone')}:</strong> {c_row['phone']}</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.dataframe(localize_df(c_acad, T, stage_labels), use_container_width=True, hide_index=True)
-        st.download_button(
-            "📥 Excel (.xlsx)",
-            data=to_excel_bytes({
-                "Certificate_Student": localize_df(pd.DataFrame([c_row.to_dict()]), T, stage_labels),
-                "Grades_Attendance": localize_df(c_acad, T, stage_labels),
-            }),
-            file_name=f"certificate_student_{cid}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-    else:
-        st.info(T["section_ready"])
-
-elif sec == "finance":
-    st.subheader(T["finance"])
-    if not st_df.empty:
-        opts = {f"#{r['id']} - {r['full_name']}": int(r["id"]) for _, r in st_df.iterrows()}
-        sel = st.selectbox(T["students"], list(opts.keys()))
-        sel_row = st_df[st_df["id"] == opts[sel]].iloc[0]
-        with st.form("pay_student_form", clear_on_submit=True):
-            rcpt_no = st.text_input(
-                T.get("receipt_no", "Receipt No."),
-                placeholder=T.get("receipt_no_ph", "REC-1001"),
-            )
-            amt = st.number_input(f"{T.get('pay_amount', 'Amount')} ({T['currency']})", min_value=0.0, step=50000.0)
-            note = st.text_input(T.get("pay_note", "Note"), value="Installment")
-            p_date = st.date_input(T.get("pay_date", "Date"), datetime.today())
-            if st.form_submit_button(T["add_pay_btn"]) and amt > 0:
-                saved_rcpt = db.record_student_payment(
-                    opts[sel],
-                    amt,
-                    p_date,
-                    note,
-                    st.session_state.username,
-                    receipt_no=rcpt_no,
-                )
-                st.session_state["last_receipt"] = {
-                    "receipt_no": saved_rcpt,
-                    "student": sel_row["full_name"],
-                    "grade": f"{sel_row['grade']} / {sel_row['section']}",
-                    "amount": amt,
-                    "date": str(p_date),
-                    "note": note,
-                    "remaining_after": max(0.0, float(sel_row["tuition_fee"]) - (float(sel_row["paid_amount"]) + float(amt))),
-                }
-                st.success(f"{T.get('receipt_no', 'Receipt No.')}: {saved_rcpt}")
-                st.rerun()
-
-        if "last_receipt" in st.session_state and st.session_state["last_receipt"]["student"] == sel_row["full_name"]:
-            lr = st.session_state["last_receipt"]
-            st.markdown(
-                f"""
-                <div class="panel-box" style="border: 2px solid #059669;">
-                    <h4>{T['school_name']}</h4>
-                    <p><strong>{T.get('receipt_no', 'Receipt No.')}:</strong> {lr['receipt_no']} | <strong>{T.get('pay_date', 'Date')}:</strong> {lr['date']}</p>
-                    <p><strong>{T.get('full_name', 'Student')}:</strong> {lr['student']} ({lr['grade']})</p>
-                    <p><strong>{T.get('pay_amount', 'Amount')}:</strong> {lr['amount']:,.0f} {T['currency']}</p>
-                    <p><strong>{T['kpi_rem']}:</strong> {lr['remaining_after']:,.0f} {T['currency']}</p>
-                    <p><strong>{T.get('pay_note', 'Note')}:</strong> {lr['note']}</p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    st.markdown("---")
-    with st.form("tx_form", clear_on_submit=True):
-        c1, c2, c3, c4, c5 = st.columns(5)
-        t_stage = c1.selectbox(T["kpi_stages"], ["kg", "primary", "high"], format_func=lambda x: stage_labels[x])
-        t_type = c2.selectbox(T.get("tx_type", "Type"), ["income", "expense"])
-        t_cat = c3.text_input(T.get("tx_category", "Category"), value="رسوم / مصروفات")
-        t_rcpt = c4.text_input(T.get("receipt_no", "Receipt No."), placeholder=T.get("receipt_no_ph", "REC-1001"))
-        t_amt = c5.number_input(f"{T.get('pay_amount', 'Amount')} ({T['currency']})", min_value=0.0, step=50000.0)
-        t_desc = st.text_input(T.get("tx_desc", "Description"))
-        t_date = st.date_input(T.get("pay_date", "Date"), datetime.today())
-        if st.form_submit_button(T.get("save_tx_btn", "💾 Save TX")) and t_amt > 0:
-            db.add_transaction(
-                selected_year,
-                t_stage,
-                t_type,
-                t_cat,
-                t_amt,
-                t_desc,
-                t_date,
-                st.session_state.username,
-                receipt_no=t_rcpt,
-            )
-            st.success("OK")
-            st.rerun()
-
-    if not tx_df.empty:
-        st.dataframe(localize_df(tx_df, T, stage_labels), use_container_width=True, hide_index=True)
-        st.download_button(
-            label="📥 Excel (.xlsx)",
-            data=to_excel_bytes({"Treasury_Transactions": localize_df(tx_df, T, stage_labels)}),
-            file_name=f"legends_transactions_{selected_year}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-
-elif sec == "reports":
-    st.subheader(T["reports"])
-
-    stage_rows = []
-    f_tx_year = tx_df[tx_df["academic_year"] == selected_year] if not tx_df.empty else tx_df
-    for s_key in ["kg", "primary", "high"]:
-        s_inc = float(f_tx_year[(f_tx_year["stage"] == s_key) & (f_tx_year["t_type"] == "income")]["amount"].sum()) if not f_tx_year.empty else 0.0
-        s_exp = float(f_tx_year[(f_tx_year["stage"] == s_key) & (f_tx_year["t_type"] == "expense")]["amount"].sum()) if not f_tx_year.empty else 0.0
-        stage_rows.append({
-            T["kpi_stages"]: stage_labels[s_key],
-            T["kpi_income"]: s_inc,
-            "Expenses": s_exp,
-            "Net Budget": s_inc - s_exp,
-        })
-    budget_df = pd.DataFrame(stage_rows)
-    st.dataframe(budget_df, use_container_width=True, hide_index=True)
-
-    st.markdown("---")
-    if not tx_df.empty:
-        period_opts = {
-            "daily": T.get("period_daily", "Daily"),
-            "weekly": T.get("period_weekly", "Weekly"),
-            "monthly": T.get("period_monthly", "Monthly"),
-            "yearly": T.get("period_yearly", "Yearly"),
-        }
-        period = st.selectbox(T.get("period", "Period"), list(period_opts.keys()), format_func=lambda x: period_opts[x])
-        ref_d = st.date_input(T.get("pay_date", "Date"), datetime.today())
-        if period == "daily":
-            rep = tx_df[tx_df["t_date"] == ref_d]
-        elif period == "weekly":
-            sw = ref_d - timedelta(days=ref_d.weekday())
-            ew = sw + timedelta(days=6)
-            rep = tx_df[(tx_df["t_date"] >= sw) & (tx_df["t_date"] <= ew)]
-        elif period == "monthly":
-            dt_c = pd.to_datetime(tx_df["t_date"])
-            rep = tx_df[(dt_c.dt.month == ref_d.month) & (dt_c.dt.year == ref_d.year)]
-        else:
-            dt_c = pd.to_datetime(tx_df["t_date"])
-            rep = tx_df[dt_c.dt.year == ref_d.year]
-
-        st.dataframe(localize_df(rep, T, stage_labels), use_container_width=True, hide_index=True)
-        st.download_button(
-            "📥 Excel (.xlsx)",
-            data=to_excel_bytes({
-                "Transactions_Report": localize_df(rep, T, stage_labels),
-                "Stages_Budget": budget_df,
-                "All_Payments": localize_df(db.get_all_payments(), T, stage_labels),
-                "Audit_Log": localize_df(db.get_audit_log(), T, stage_labels),
-            }),
-            file_name=f"legends_full_report_{period}_{ref_d}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-
-    st.markdown("---")
-    st.markdown(f"### {T.get('backup_restore_title', 'Backup & Restore (.db)')}")
-    db.init_db()
-    b_col1, b_col2 = st.columns(2)
-
-    with b_col1:
-        if os.path.exists(db.DB_NAME):
-            with open(db.DB_NAME, "rb") as fp:
-                db_bytes = fp.read()
-            st.download_button(
-                label=T.get("backup_btn", "📥 Backup (.db)"),
-                data=db_bytes,
-                file_name=f"legends_backup_{datetime.today().strftime('%Y%m%d_%H%M')}.db",
-                mime="application/octet-stream",
-                use_container_width=True,
-            )
-
-    with b_col2:
-        if st.session_state.role == "admin":
-            up_db = st.file_uploader(T.get("restore_label", "Restore (.db)"), type=["db"], key="restore_db_uploader")
-            if up_db is not None:
-                uploaded_bytes = up_db.getbuffer().tobytes()
-                if not is_valid_sqlite_db(uploaded_bytes):
-                    st.error(T.get("invalid_db_file", "الملف المرفوع ليس قاعدة بيانات SQLite صالحة."))
-                else:
-                    if st.button(T.get("confirm_restore_btn", "♻️ تأكيد استعادة قاعدة البيانات"), key="btn_confirm_restore"):
-                        safety_copy = f"{db.DB_NAME}.bak"
-                        if os.path.exists(db.DB_NAME):
-                            with open(db.DB_NAME, "rb") as cur_fp, open(safety_copy, "wb") as bak_fp:
-                                bak_fp.write(cur_fp.read())
-                        with open(db.DB_NAME, "wb") as out_f:
-                            out_f.write(uploaded_bytes)
-                        db.init_db()
-                        db.log_action(st.session_state.username, "RESTORE_DB", f"Restored database from {up_db.name}")
-                        st.success(T.get("restore_success", "تمت استعادة قاعدة البيانات وترقيتها بنجاح."))
-                        st.rerun()
-        else:
-            st.info(T.get("admin_only_restore", "استعادة قاعدة البيانات متاحة لمدير النظام (Admin) فقط."))
-
-    st.markdown("---")
-    st.markdown("### ⚠️ إعادة ضبط البرنامج وحذف كافة البيانات (Factory Reset)")
-    if st.session_state.role == "admin":
-        st.caption("سيتم حذف جميع البيانات الحالية وإعادة تهيئة قاعدة البيانات فارغة وجاهزة من جديد مع الاحتفاظ بنسخة أمان مؤقتة على الخادم.")
-        confirm_reset = st.checkbox(
-            "أؤكد أنني أريد حذف كافة البيانات والملفات المسجلة وإعادة البرنامج جديداً من البداية",
-            key="confirm_factory_reset",
-        )
-        confirm_word = st.text_input(
-            "اكتب كلمة RESET للتأكيد النهائي",
-            key="confirm_reset_word",
-        ).strip()
-
-        if st.button("🧨 حذف كافة البيانات وإعادة البرنامج جديداً", key="btn_factory_reset"):
-            if not confirm_reset or confirm_word != "RESET":
-                st.error("يرجى تفعيل مربع التأكيد وكتابة كلمة RESET أولاً.")
-            else:
-                db.reset_all_data(st.session_state.username)
-                st.session_state.pop("last_receipt", None)
-                st.success("تم حذف كافة البيانات وإعادة تهيئة البرنامج جديداً بنجاح.")
-                st.rerun()
-    else:
-        st.info("حذف كافة البيانات وإعادة ضبط البرنامج متاح لمدير النظام (Admin) فقط.")
-
-    st.markdown("---")
-    st.dataframe(localize_df(db.get_audit_log(), T, stage_labels), use_container_width=True, hide_index=True)
-
-elif sec == "users":
-    st.subheader(T["users"])
-    if st.session_state.role != "admin":
-        st.warning("Admin only")
-    else:
-        with st.form("add_user_form", clear_on_submit=True):
-            c1, c2, c3 = st.columns(3)
-            new_u = c1.text_input(T["username"])
-            new_p = c2.text_input(T["password"], type="password")
-            new_r = c3.selectbox(T.get("role_label", "Role"), ["user", "admin"])
-            if st.form_submit_button(T.get("save_user_btn", "Save User")) and new_u.strip() and new_p.strip():
-                db.create_user(new_u, new_p, new_r, st.session_state.username)
-                st.success("OK")
-                st.rerun()
-        st.dataframe(localize_df(db.get_users(), T, stage_labels), use_container_width=True, hide_index=True)
-
-else:
-    st.subheader(T.get(sec, sec))
-    st.info(T["section_ready"])
+        st.info(T.get("section_ready", ""))

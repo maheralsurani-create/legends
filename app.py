@@ -62,6 +62,56 @@ def to_excel_bytes(sheets_dict: dict) -> bytes:
     return buf.getvalue()
 
 
+def localize_df(df: pd.DataFrame, T_dict: dict, st_labels: dict = None) -> pd.DataFrame:
+    if df is None or df.empty:
+        return df
+    out = df.copy()
+    if st_labels and "stage" in out.columns:
+        out["stage"] = out["stage"].map(lambda x: st_labels.get(x, x))
+    col_map = {
+        "id": T_dict.get("col_id", "ID"),
+        "payment_id": T_dict.get("col_id", "ID"),
+        "student_id": T_dict.get("col_student_id", "Student ID"),
+        "student_name": T_dict.get("col_student_name", "Student Name"),
+        "academic_year": T_dict.get("col_academic_year", "Academic Year"),
+        "full_name": T_dict.get("col_full_name", "Full Name"),
+        "parent_name": T_dict.get("col_parent_name", "Guardian"),
+        "phone": T_dict.get("col_phone", "Phone"),
+        "stage": T_dict.get("col_stage", "Stage"),
+        "grade": T_dict.get("col_grade", "Grade"),
+        "section": T_dict.get("col_section", "Section"),
+        "tuition_fee": T_dict.get("col_tuition_fee", "Annual Tuition"),
+        "paid_amount": T_dict.get("col_paid_amount", "Paid"),
+        "remaining": T_dict.get("col_remaining", "Remaining"),
+        "remaining_IQD": T_dict.get("col_remaining", "Remaining"),
+        "receipt_no": T_dict.get("col_receipt_no", "Receipt No."),
+        "amount": T_dict.get("col_amount", "Amount"),
+        "pay_date": T_dict.get("col_pay_date", "Payment Date"),
+        "note": T_dict.get("col_note", "Note"),
+        "created_by": T_dict.get("col_created_by", "Created By"),
+        "rec_date": T_dict.get("col_rec_date", "Date"),
+        "attendance": T_dict.get("col_attendance", "Attendance"),
+        "subject": T_dict.get("col_subject", "Subject"),
+        "score": T_dict.get("col_score", "Score"),
+        "specialty": T_dict.get("col_specialty", "Specialty"),
+        "subject_name": T_dict.get("col_subject_name", "Subject Name"),
+        "teacher_name": T_dict.get("col_teacher_name", "Teacher"),
+        "day_name": T_dict.get("col_day_name", "Day"),
+        "time_slot": T_dict.get("col_time_slot", "Time Slot"),
+        "room": T_dict.get("col_room", "Room"),
+        "t_type": T_dict.get("col_t_type", "Type"),
+        "category": T_dict.get("col_category", "Category"),
+        "description": T_dict.get("col_description", "Description"),
+        "t_date": T_dict.get("col_t_date", "Date"),
+        "timestamp": T_dict.get("col_timestamp", "Timestamp"),
+        "username": T_dict.get("col_username", "Username"),
+        "action": T_dict.get("col_action", "Action"),
+        "details": T_dict.get("col_details", "Details"),
+        "role": T_dict.get("col_role", "Role"),
+    }
+    return out.rename(columns={k: v for k, v in col_map.items() if k in out.columns})
+
+
 if "lang" not in st.session_state:
     st.session_state.lang = "ar"
 if "logged_in" not in st.session_state:
@@ -407,7 +457,7 @@ if sec == "dashboard":
         st.markdown('<div class="panel-box">', unsafe_allow_html=True)
         st.markdown(f"**{T['recent_activity']}**")
         if not acad_df.empty:
-            st.dataframe(acad_df[["rec_date", "student_name", "subject", "score"]].head(5), use_container_width=True, hide_index=True)
+            st.dataframe(localize_df(acad_df[["rec_date", "student_name", "subject", "score"]].head(5), T, stage_labels), use_container_width=True, hide_index=True)
         else:
             st.caption(T["section_ready"])
         st.markdown("</div>", unsafe_allow_html=True)
@@ -416,12 +466,12 @@ if sec == "dashboard":
         st.markdown('<div class="panel-box">', unsafe_allow_html=True)
         st.markdown(f"**{T['today_schedule']}**")
         if not schedules_df.empty:
-            st.dataframe(schedules_df[["day_name", "time_slot", "grade", "subject_name", "room"]].head(5), use_container_width=True, hide_index=True)
+            st.dataframe(localize_df(schedules_df[["day_name", "time_slot", "grade", "subject_name", "room"]].head(5), T, stage_labels), use_container_width=True, hide_index=True)
         else:
             st.dataframe(
                 pd.DataFrame([
-                    {"Time": "08:00 - 08:45", "Class": "KG-1 / A", "Subject": "Quran & Language", "Room": "R-101"},
-                    {"Time": "08:50 - 09:35", "Class": "Grade 5 / A", "Subject": "Mathematics", "Room": "R-204"},
+                    {T["time"]: "08:00 - 08:45", T["grade"]: "KG-1 / A", T["subject"]: "Quran & Language", T["room"]: "R-101"},
+                    {T["time"]: "08:50 - 09:35", T["grade"]: "Grade 5 / A", T["subject"]: "Mathematics", T["room"]: "R-204"},
                 ]),
                 use_container_width=True,
                 hide_index=True,
@@ -509,11 +559,11 @@ elif sec == "students":
                     | view_students["id"].astype(str).str.contains(search_q, na=False)
                 ]
             view_students["remaining_IQD"] = view_students["tuition_fee"] - view_students["paid_amount"]
-            st.dataframe(view_students, use_container_width=True, hide_index=True)
+            st.dataframe(localize_df(view_students, T, stage_labels), use_container_width=True, hide_index=True)
 
             st.download_button(
                 label=T.get("export_students_xl", "📥 Export Students (.xlsx)"),
-                data=to_excel_bytes({"Students": view_students}),
+                data=to_excel_bytes({"Students": localize_df(view_students, T, stage_labels)}),
                 file_name=f"legends_students_{stage_filter}_{selected_year}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
@@ -651,18 +701,20 @@ elif sec == "students":
                             unsafe_allow_html=True,
                         )
 
-                    st.dataframe(db.get_student_payments(sid), use_container_width=True, hide_index=True)
+                    st_pay_df = db.get_student_payments(sid)
+                    st.dataframe(localize_df(st_pay_df, T, stage_labels), use_container_width=True, hide_index=True)
 
                 with col_acad:
                     st.markdown(f"#### {T.get('acad_history_title', 'Academic History')}")
-                    st.dataframe(db.get_student_academic(sid), use_container_width=True, hide_index=True)
+                    st_acad_df = db.get_student_academic(sid)
+                    st.dataframe(localize_df(st_acad_df, T, stage_labels), use_container_width=True, hide_index=True)
 
                 st.download_button(
                     label=T.get("export_profile_xl", "📥 Export Profile (.xlsx)"),
                     data=to_excel_bytes({
-                        "Student_Info": pd.DataFrame([s_info.to_dict()]),
-                        "Payments": db.get_student_payments(sid),
-                        "Academic": db.get_student_academic(sid),
+                        "Student_Info": localize_df(pd.DataFrame([s_info.to_dict()]), T, stage_labels),
+                        "Payments": localize_df(st_pay_df, T, stage_labels),
+                        "Academic": localize_df(st_acad_df, T, stage_labels),
                     }),
                     file_name=f"student_{sid}_profile.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -673,27 +725,27 @@ elif sec == "teachers":
     with st.form("add_teacher_form", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         t_name = c1.text_input(T.get("full_name", "Full Name"))
-        t_spec = c2.text_input("Specialty / التخصص / پسپۆڕی")
+        t_spec = c2.text_input(T.get("specialty", "Specialty"))
         t_phone = c3.text_input(T.get("phone", "Phone"))
         c4, c5 = st.columns(2)
         t_stage = c4.selectbox(T["kpi_stages"], ["kg", "primary", "high"], format_func=lambda x: stage_labels[x])
         t_grade = c5.text_input(T.get("grade", "Grade"), value="All Grades")
-        if st.form_submit_button("+ Teacher") and t_name.strip():
+        if st.form_submit_button(f"+ {T['teachers']}") and t_name.strip():
             db.add_teacher(selected_year, t_name, t_spec, t_phone, t_stage, t_grade, st.session_state.username)
             st.rerun()
 
     if not teachers_df.empty:
-        st.dataframe(teachers_df, use_container_width=True, hide_index=True)
+        st.dataframe(localize_df(teachers_df, T, stage_labels), use_container_width=True, hide_index=True)
         st.download_button(
             "📥 Excel (.xlsx)",
-            data=to_excel_bytes({"Teachers": teachers_df}),
+            data=to_excel_bytes({"Teachers": localize_df(teachers_df, T, stage_labels)}),
             file_name=f"legends_teachers_{selected_year}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
         if st.session_state.role == "admin":
             t_opts = {f"#{int(r['id'])} — {r['full_name']}": int(r["id"]) for _, r in teachers_df.iterrows()}
-            del_t_sel = st.selectbox("Delete Teacher", list(t_opts.keys()), key="del_t_sel")
-            if st.button("🗑️ Delete", key="btn_del_t"):
+            del_t_sel = st.selectbox(T["teachers"], list(t_opts.keys()), key="del_t_sel")
+            if st.button(T.get("delete_btn", "🗑️ Delete"), key="btn_del_t"):
                 db.delete_teacher(t_opts[del_t_sel], st.session_state.username)
                 st.rerun()
 
@@ -709,10 +761,10 @@ elif sec == "parents":
                 | p_view["full_name"].astype(str).str.lower().str.contains(p_search, na=False)
                 | p_view["phone"].astype(str).str.lower().str.contains(p_search, na=False)
             ]
-        st.dataframe(p_view, use_container_width=True, hide_index=True)
+        st.dataframe(localize_df(p_view, T, stage_labels), use_container_width=True, hide_index=True)
         st.download_button(
             "📥 Excel (.xlsx)",
-            data=to_excel_bytes({"Parents": p_view}),
+            data=to_excel_bytes({"Parents": localize_df(p_view, T, stage_labels)}),
             file_name=f"legends_parents_{selected_year}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
@@ -749,24 +801,24 @@ elif sec == "subjects":
         c1, c2, c3, c4 = st.columns(4)
         sub_stage = c1.selectbox(T["kpi_stages"], ["kg", "primary", "high"], format_func=lambda x: stage_labels[x])
         sub_grade = c2.text_input(T.get("grade", "Grade"), value="Grade 1")
-        sub_name = c3.text_input("Subject / المادة / وانە")
+        sub_name = c3.text_input(T.get("subject", "Subject"))
         sub_teacher = c4.text_input(T["teachers"])
-        if st.form_submit_button("+ Subject") and sub_name.strip():
+        if st.form_submit_button(f"+ {T['subjects']}") and sub_name.strip():
             db.add_subject(selected_year, sub_stage, sub_grade, sub_name, sub_teacher, st.session_state.username)
             st.rerun()
 
     if not subjects_df.empty:
-        st.dataframe(subjects_df, use_container_width=True, hide_index=True)
+        st.dataframe(localize_df(subjects_df, T, stage_labels), use_container_width=True, hide_index=True)
         st.download_button(
             "📥 Excel (.xlsx)",
-            data=to_excel_bytes({"Subjects": subjects_df}),
+            data=to_excel_bytes({"Subjects": localize_df(subjects_df, T, stage_labels)}),
             file_name=f"legends_subjects_{selected_year}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
         if st.session_state.role == "admin":
             sub_opts = {f"#{int(r['id'])} — {r['subject_name']} ({r['grade']})": int(r["id"]) for _, r in subjects_df.iterrows()}
-            del_sub_sel = st.selectbox("Delete Subject", list(sub_opts.keys()), key="del_sub_sel")
-            if st.button("🗑️ Delete", key="btn_del_sub"):
+            del_sub_sel = st.selectbox(T["subjects"], list(sub_opts.keys()), key="del_sub_sel")
+            if st.button(T.get("delete_btn", "🗑️ Delete"), key="btn_del_sub"):
                 db.delete_subject(sub_opts[del_sub_sel], st.session_state.username)
                 st.rerun()
 
@@ -774,30 +826,30 @@ elif sec == "schedule":
     st.subheader(f"{T['schedule']} — {selected_year}")
     with st.form("add_sched_form", clear_on_submit=True):
         c1, c2, c3, c4 = st.columns(4)
-        sc_day = c1.selectbox("Day / اليوم / ڕۆژ", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
-        sc_time = c2.text_input("Time / الوقت / کات", value="08:00 - 08:45")
+        sc_day = c1.selectbox(T.get("day", "Day"), ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
+        sc_time = c2.text_input(T.get("time", "Time"), value="08:00 - 08:45")
         sc_stage = c3.selectbox(T["kpi_stages"], ["kg", "primary", "high"], format_func=lambda x: stage_labels[x])
         sc_grade = c4.text_input(T.get("grade", "Grade"), value="Grade 1")
         c5, c6, c7 = st.columns(3)
         sc_sec = c5.text_input(T.get("section", "Section"), value="A")
-        sc_subj = c6.text_input("Subject / المادة / وانە")
-        sc_room = c7.text_input("Room / القاعة / ژوور", value="R-101")
-        if st.form_submit_button("+ Schedule") and sc_subj.strip():
+        sc_subj = c6.text_input(T.get("subject", "Subject"))
+        sc_room = c7.text_input(T.get("room", "Room"), value="R-101")
+        if st.form_submit_button(f"+ {T['schedule']}") and sc_subj.strip():
             db.add_schedule(selected_year, sc_day, sc_time, sc_stage, sc_grade, sc_sec, sc_subj, sc_room, st.session_state.username)
             st.rerun()
 
     if not schedules_df.empty:
-        st.dataframe(schedules_df, use_container_width=True, hide_index=True)
+        st.dataframe(localize_df(schedules_df, T, stage_labels), use_container_width=True, hide_index=True)
         st.download_button(
             "📥 Excel (.xlsx)",
-            data=to_excel_bytes({"Schedule": schedules_df}),
+            data=to_excel_bytes({"Schedule": localize_df(schedules_df, T, stage_labels)}),
             file_name=f"legends_schedule_{selected_year}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
         if st.session_state.role == "admin":
             sc_opts = {f"#{int(r['id'])} — {r['day_name']} {r['time_slot']} ({r['subject_name']})": int(r["id"]) for _, r in schedules_df.iterrows()}
-            del_sc_sel = st.selectbox("Delete Slot", list(sc_opts.keys()), key="del_sc_sel")
-            if st.button("🗑️ Delete", key="btn_del_sc"):
+            del_sc_sel = st.selectbox(T["schedule"], list(sc_opts.keys()), key="del_sc_sel")
+            if st.button(T.get("delete_btn", "🗑️ Delete"), key="btn_del_sc"):
                 db.delete_schedule(sc_opts[del_sc_sel], st.session_state.username)
                 st.rerun()
 
@@ -808,17 +860,17 @@ elif sec == "attendance":
         with st.form("att_form", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
             att_st = c1.selectbox(T["students"], list(st_map.keys()))
-            att_dt = c2.date_input("Date / التاريخ / بەروار", datetime.today())
+            att_dt = c2.date_input(T.get("pay_date", "Date"), datetime.today())
             att_status = c3.selectbox(T["attendance"], [T["present"], T["absent"], T["late"]])
-            if st.form_submit_button("💾 Save"):
+            if st.form_submit_button(T.get("save_btn", "💾 Save")):
                 db.add_academic_record(st_map[att_st], selected_year, att_dt, att_status, "-", "-", st.session_state.username)
                 st.rerun()
 
     if not acad_df.empty:
-        st.dataframe(acad_df, use_container_width=True, hide_index=True)
+        st.dataframe(localize_df(acad_df, T, stage_labels), use_container_width=True, hide_index=True)
         st.download_button(
             "📥 Excel (.xlsx)",
-            data=to_excel_bytes({"Attendance": acad_df}),
+            data=to_excel_bytes({"Attendance": localize_df(acad_df, T, stage_labels)}),
             file_name=f"legends_attendance_{selected_year}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
@@ -830,18 +882,18 @@ elif sec == "exams":
         with st.form("exam_form", clear_on_submit=True):
             c1, c2, c3, c4 = st.columns(4)
             ex_st = c1.selectbox(T["students"], list(st_map.keys()))
-            ex_dt = c2.date_input("Date / التاريخ / بەروار", datetime.today())
-            ex_subj = c3.text_input("Subject / المادة / وانە", value="Mathematics")
-            ex_score = c4.text_input("Score / الدرجة / نمرە", value="95 / 100")
-            if st.form_submit_button("💾 Save") and ex_subj.strip() and ex_score.strip():
+            ex_dt = c2.date_input(T.get("pay_date", "Date"), datetime.today())
+            ex_subj = c3.text_input(T.get("subject", "Subject"), value="Mathematics")
+            ex_score = c4.text_input(T.get("score", "Score"), value="95 / 100")
+            if st.form_submit_button(T.get("save_btn", "💾 Save")) and ex_subj.strip() and ex_score.strip():
                 db.add_academic_record(st_map[ex_st], selected_year, ex_dt, T["present"], ex_subj, ex_score, st.session_state.username)
                 st.rerun()
 
     if not acad_df.empty:
-        st.dataframe(acad_df, use_container_width=True, hide_index=True)
+        st.dataframe(localize_df(acad_df, T, stage_labels), use_container_width=True, hide_index=True)
         st.download_button(
             "📥 Excel (.xlsx)",
-            data=to_excel_bytes({"Exams": acad_df}),
+            data=to_excel_bytes({"Exams": localize_df(acad_df, T, stage_labels)}),
             file_name=f"legends_exams_{selected_year}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
@@ -868,12 +920,12 @@ elif sec == "certificates":
             """,
             unsafe_allow_html=True,
         )
-        st.dataframe(c_acad, use_container_width=True, hide_index=True)
+        st.dataframe(localize_df(c_acad, T, stage_labels), use_container_width=True, hide_index=True)
         st.download_button(
             "📥 Excel (.xlsx)",
             data=to_excel_bytes({
-                "Certificate_Student": pd.DataFrame([c_row.to_dict()]),
-                "Grades_Attendance": c_acad,
+                "Certificate_Student": localize_df(pd.DataFrame([c_row.to_dict()]), T, stage_labels),
+                "Grades_Attendance": localize_df(c_acad, T, stage_labels),
             }),
             file_name=f"certificate_student_{cid}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -892,9 +944,9 @@ elif sec == "finance":
                 T.get("receipt_no", "Receipt No."),
                 placeholder=T.get("receipt_no_ph", "REC-1001"),
             )
-            amt = st.number_input(f"{T['add_pay_btn']} ({T['currency']})", min_value=0.0, step=50000.0)
-            note = st.text_input("Note / ملاحظة / تێبینی", value="Installment")
-            p_date = st.date_input("Date / التاريخ / بەروار", datetime.today())
+            amt = st.number_input(f"{T.get('pay_amount', 'Amount')} ({T['currency']})", min_value=0.0, step=50000.0)
+            note = st.text_input(T.get("pay_note", "Note"), value="Installment")
+            p_date = st.date_input(T.get("pay_date", "Date"), datetime.today())
             if st.form_submit_button(T["add_pay_btn"]) and amt > 0:
                 saved_rcpt = db.record_student_payment(
                     opts[sel],
@@ -936,13 +988,13 @@ elif sec == "finance":
     with st.form("tx_form", clear_on_submit=True):
         c1, c2, c3, c4, c5 = st.columns(5)
         t_stage = c1.selectbox(T["kpi_stages"], ["kg", "primary", "high"], format_func=lambda x: stage_labels[x])
-        t_type = c2.selectbox("Type / النوع", ["income", "expense"])
-        t_cat = c3.text_input("Category / البند", value="رسوم / مصروفات")
+        t_type = c2.selectbox(T.get("tx_type", "Type"), ["income", "expense"])
+        t_cat = c3.text_input(T.get("tx_category", "Category"), value="رسوم / مصروفات")
         t_rcpt = c4.text_input(T.get("receipt_no", "Receipt No."), placeholder=T.get("receipt_no_ph", "REC-1001"))
-        t_amt = c5.number_input(f"Amount ({T['currency']})", min_value=0.0, step=50000.0)
-        t_desc = st.text_input("Description / البيان")
-        t_date = st.date_input("Date / التاريخ", datetime.today())
-        if st.form_submit_button("Save TX") and t_amt > 0:
+        t_amt = c5.number_input(f"{T.get('pay_amount', 'Amount')} ({T['currency']})", min_value=0.0, step=50000.0)
+        t_desc = st.text_input(T.get("tx_desc", "Description"))
+        t_date = st.date_input(T.get("pay_date", "Date"), datetime.today())
+        if st.form_submit_button(T.get("save_tx_btn", "💾 Save TX")) and t_amt > 0:
             db.add_transaction(
                 selected_year,
                 t_stage,
@@ -958,10 +1010,10 @@ elif sec == "finance":
             st.rerun()
 
     if not tx_df.empty:
-        st.dataframe(tx_df, use_container_width=True, hide_index=True)
+        st.dataframe(localize_df(tx_df, T, stage_labels), use_container_width=True, hide_index=True)
         st.download_button(
             label="📥 Excel (.xlsx)",
-            data=to_excel_bytes({"Treasury_Transactions": tx_df}),
+            data=to_excel_bytes({"Treasury_Transactions": localize_df(tx_df, T, stage_labels)}),
             file_name=f"legends_transactions_{selected_year}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
@@ -985,8 +1037,14 @@ elif sec == "reports":
 
     st.markdown("---")
     if not tx_df.empty:
-        period = st.selectbox("Period", ["daily", "weekly", "monthly", "yearly"])
-        ref_d = st.date_input("Date", datetime.today())
+        period_opts = {
+            "daily": T.get("period_daily", "Daily"),
+            "weekly": T.get("period_weekly", "Weekly"),
+            "monthly": T.get("period_monthly", "Monthly"),
+            "yearly": T.get("period_yearly", "Yearly"),
+        }
+        period = st.selectbox(T.get("period", "Period"), list(period_opts.keys()), format_func=lambda x: period_opts[x])
+        ref_d = st.date_input(T.get("pay_date", "Date"), datetime.today())
         if period == "daily":
             rep = tx_df[tx_df["t_date"] == ref_d]
         elif period == "weekly":
@@ -1000,14 +1058,14 @@ elif sec == "reports":
             dt_c = pd.to_datetime(tx_df["t_date"])
             rep = tx_df[dt_c.dt.year == ref_d.year]
 
-        st.dataframe(rep, use_container_width=True, hide_index=True)
+        st.dataframe(localize_df(rep, T, stage_labels), use_container_width=True, hide_index=True)
         st.download_button(
             "📥 Excel (.xlsx)",
             data=to_excel_bytes({
-                "Transactions_Report": rep,
+                "Transactions_Report": localize_df(rep, T, stage_labels),
                 "Stages_Budget": budget_df,
-                "All_Payments": db.get_all_payments(),
-                "Audit_Log": db.get_audit_log(),
+                "All_Payments": localize_df(db.get_all_payments(), T, stage_labels),
+                "Audit_Log": localize_df(db.get_audit_log(), T, stage_labels),
             }),
             file_name=f"legends_full_report_{period}_{ref_d}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1077,7 +1135,7 @@ elif sec == "reports":
         st.info("حذف كافة البيانات وإعادة ضبط البرنامج متاح لمدير النظام (Admin) فقط.")
 
     st.markdown("---")
-    st.dataframe(db.get_audit_log(), use_container_width=True, hide_index=True)
+    st.dataframe(localize_df(db.get_audit_log(), T, stage_labels), use_container_width=True, hide_index=True)
 
 elif sec == "users":
     st.subheader(T["users"])
@@ -1088,12 +1146,12 @@ elif sec == "users":
             c1, c2, c3 = st.columns(3)
             new_u = c1.text_input(T["username"])
             new_p = c2.text_input(T["password"], type="password")
-            new_r = c3.selectbox("Role", ["user", "admin"])
-            if st.form_submit_button("Save User") and new_u.strip() and new_p.strip():
+            new_r = c3.selectbox(T.get("role_label", "Role"), ["user", "admin"])
+            if st.form_submit_button(T.get("save_user_btn", "Save User")) and new_u.strip() and new_p.strip():
                 db.create_user(new_u, new_p, new_r, st.session_state.username)
                 st.success("OK")
                 st.rerun()
-        st.dataframe(db.get_users(), use_container_width=True, hide_index=True)
+        st.dataframe(localize_df(db.get_users(), T, stage_labels), use_container_width=True, hide_index=True)
 
 else:
     st.subheader(T.get(sec, sec))
